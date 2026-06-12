@@ -17,11 +17,12 @@ at the appropriate milestone. Full design rationale lives in
 
 ## Milestone 0 — Scaffold and deploy
 
-- [ ] Scaffold Vite + TypeScript project (`index.html`, `src/main.ts`, configs)
-- [ ] Canvas with integer scaler, letterboxing, and resize handling
-- [ ] Fixed-timestep update/render loop
-- [ ] GitHub Actions workflow for Pages deploy
-- [ ] Init git repo, push to GitHub, enable Pages
+- [x] Scaffold Vite + TypeScript project (`index.html`, `src/main.ts`, configs)
+- [x] Canvas with integer scaler, letterboxing, and resize handling
+- [x] Fixed-timestep update/render loop
+- [x] GitHub Actions workflow for Pages deploy
+- [x] Init git repo and initial commit
+- [ ] Push to GitHub, enable Pages (Settings > Pages > Source: GitHub Actions)
 - [ ] Verify deployed URL shows the scaled playfield on desktop and phone
 
 ## Milestone 1 — First simple level
