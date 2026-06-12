@@ -1,0 +1,30 @@
+---
+description: How to find and use art assets - always consult art-manifest.md, never trust file search for PNGs
+alwaysApply: true
+---
+
+# Art Asset Discovery
+
+The file-search tools (Glob, sandboxed shell) on this machine have failed to surface
+binary files: a `**/*.png` glob once returned 0 results even though 161 PNGs exist.
+NEVER conclude an asset is missing based on Glob or sandboxed shell output.
+
+## Rules
+
+1. To find art, ALWAYS read [art-manifest.md](mdc:art-manifest.md) first. It is the
+   authoritative directory of every art/metadata file in the project.
+2. Every asset is a pair: `Name.png` (Aseprite-exported image) + `Name.json`
+   (frame/animation metadata). Treat them as a unit - move/copy both together.
+3. If a file listed in the manifest seems missing, verify with the Read tool on the
+   exact path (Read handles images) before claiming it doesn't exist.
+4. After adding, removing, or moving any assets, regenerate the manifest:
+   `powershell -NoProfile -ExecutionPolicy Bypass -File tools/generate-art-manifest.ps1`
+   (run with full permissions - the sandboxed shell silently no-ops on this machine).
+
+## Folder policy
+
+- `import_tiles/`, `import_tiles_enemy/`, `import_tiles_tools/` are a quarantined
+  review pool from a previous game. Do NOT use them in the game directly and do NOT
+  modify them.
+- Art may only be used after the user reviews and approves it; approved pairs get
+  copied into `assets/art/`, which is the only art folder the game loads from.
