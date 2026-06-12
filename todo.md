@@ -56,8 +56,8 @@ at the appropriate milestone. Full design rationale lives in
       show available directions and light up while active; A/B light while pressed.
       Continuous rotation (no hysteresis); A pulled inward off the camera edge
 - [x] Whip stub on B so the controls can be felt
-- [ ] On-device phone test passed for feel/layout; still open: settle the
-      16px vs 20px tile size question
+- [x] On-device phone test passed for feel/layout; 16px tiles confirmed
+      readable on device — tile size is locked
 
 ## Milestone 3 — Enemies
 

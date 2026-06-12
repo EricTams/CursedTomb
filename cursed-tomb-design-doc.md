@@ -164,7 +164,7 @@ Difficulty = the mix (early: mostly dexterity + one logistics beat; late: logist
 - **Playfield: 28 × 21 tiles at 16 logical px = 448 × 336 (exactly 4:3).** 28 wide = Lode Runner width.
 - **~198 px thumb zones each side** (d-pad left; B/A right). HUD strip above: score left, **timer center**, held-item box right.
 - Keep critical action away from bottom corners of the playfield flanks (thumb occlusion).
-- Caution flagged: 16 logical px tiles ≈ 2.5 mm — crisp but small. Test on device before locking; 20 px tiles → 22 × 16 grid at the same 4:3 is the fallback.
+- 16 logical px tiles confirmed readable in the Milestone 2 on-device test; tile size is locked. (The 20 px / 22 × 16 fallback is retired.)
 - Portrait alternative considered (13 wide × ~19 tall): set aside in favor of landscape, revisitable.
 
 ### Rendering
@@ -211,7 +211,6 @@ Difficulty = the mix (early: mostly dexterity + one logistics beat; late: logist
 - Cursed-variant grabbability and curse tax (lean: grabbable with drain-while-held tax).
 - Whip vs. curse entities (lean: stun only, never grab/kill).
 - Exact ending greed-check at the burial chamber.
-- Final tile size (16 vs. 20 logical px) pending on-device test.
 - Tap-to-whip touch scheme vs. pure virtual buttons.
 - Discarding a held object without activating it: needed at all? If so, how — B is activate, and there is no chord or extra button to spend on discard. (Decide at Milestone 3 with the hold system.)
 - What ends a "run": fixed depth? endless? depth-loop with escalation?

@@ -1,6 +1,6 @@
 // Playfield geometry per design doc §8.
-// 28x21 tiles @ 16px = 448x336, exactly 4:3. If the on-device test (todo.md,
-// Milestone 2) votes for 20px tiles, this is the only file that changes.
+// 28x21 tiles @ 16px = 448x336, exactly 4:3. 16px confirmed readable in the
+// Milestone 2 on-device test; tile size is locked.
 export const TILE = 16;
 export const GRID_W = 28;
 export const GRID_H = 21;
