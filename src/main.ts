@@ -5,6 +5,7 @@ import { loadArt } from "./art";
 import { Input } from "./input";
 import { KeyboardSource } from "./keyboard";
 import { TouchSource } from "./touch";
+import { OrientationGuard } from "./orientation";
 import { LEVEL_1 } from "./levels/level1";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -14,12 +15,14 @@ const input = new Input();
 input.addSource(new KeyboardSource());
 const touch = new TouchSource();
 input.addSource(touch);
+const orientation = new OrientationGuard();
 
 const art = await loadArt();
 const game = new Game(screen.ctx, art, input, LEVEL_1);
 
 startLoop({
   update() {
+    if (orientation.paused) return; // portrait on a phone: wait for rotation
     game.update();
   },
 

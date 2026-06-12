@@ -10,7 +10,6 @@ import { ActionState, Input, InputSource, emptyActions } from "./input";
 // the segment matching the live merged input lights up (see render()).
 
 const DEAD_ZONE = 0.28; // fraction of pad radius with no direction
-const HYSTERESIS_DEG = 8; // extra degrees needed to leave the current sector
 
 // Sector index 0..7 counterclockwise-in-screen-space from +x:
 // 0=right, 1=down-right, 2=down, 3=down-left, 4=left, 5=up-left, 6=up, 7=up-right.
@@ -74,8 +73,11 @@ const CSS = `
   background: rgba(255, 255, 255, 0.5);
   color: rgba(0, 0, 0, 0.7);
 }
-#touch-btn-b { left: 0; top: 14px; }
-#touch-btn-a { right: 0; bottom: 14px; }
+/* B upper-outer, A lower and pulled toward screen center: keeps A right of B
+   (NES order) by center, but off the screen's right edge where the camera
+   notch sits on landscape phones. */
+#touch-btn-b { left: 0; top: 0; }
+#touch-btn-a { left: 32px; bottom: 0; }
 `;
 
 // setPointerCapture throws for pointers the browser no longer (or never)
@@ -117,7 +119,6 @@ export class TouchSource implements InputSource {
   private readonly btnB: HTMLDivElement;
 
   private padPointer = -1; // pointerId steering the d-pad, -1 = none
-  private sector = -1; // current 8-way sector, -1 = dead zone / no touch
   // Active pointers over the button zone, for slide-between-buttons support.
   private readonly buttonPointers = new Map<number, { x: number; y: number }>();
 
@@ -223,21 +224,15 @@ export class TouchSource implements InputSource {
       return;
     }
 
+    // Continuous control: direction follows the thumb angle directly, with no
+    // hysteresis at sector boundaries (it read as dead spots when rotating).
     const angle = (Math.atan2(dy, dx) * 180) / Math.PI; // -180..180, 0 = right
-    if (this.sector !== -1) {
-      // Hysteresis: stay in the current sector until the thumb is clearly out.
-      const center = this.sector * 45;
-      let delta = angle - center;
-      while (delta > 180) delta -= 360;
-      while (delta < -180) delta += 360;
-      if (Math.abs(delta) <= 22.5 + HYSTERESIS_DEG) return;
-    }
     const sector = ((Math.round(angle / 45) % 8) + 8) % 8;
     this.setSector(sector);
   }
 
+  // sector -1 = dead zone / no touch
   private setSector(sector: number): void {
-    this.sector = sector;
     this.actions.left = false;
     this.actions.right = false;
     this.actions.up = false;
