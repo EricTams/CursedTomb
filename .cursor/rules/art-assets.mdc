@@ -24,7 +24,7 @@ NEVER conclude an asset is missing based on Glob or sandboxed shell output.
 ## Folder policy
 
 - `import_tiles/`, `import_tiles_enemy/`, `import_tiles_tools/` are a quarantined
-  review pool from a previous game. Do NOT use them in the game directly and do NOT
-  modify them.
+  review pool from a previous game. They are gitignored (local-only, never pushed).
+  Do NOT use them in the game directly and do NOT modify them.
 - Art may only be used after the user reviews and approves it; approved pairs get
   copied into `assets/art/`, which is the only art folder the game loads from.
