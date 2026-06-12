@@ -1,3 +1,25 @@
+# Dependencies and build output
 node_modules/
 dist/
+
+# Local art review pool - not part of the repo. Approved PNG+JSON pairs get
+# copied into assets/art/ (which IS tracked). See .cursor/rules/art-assets.mdc
+import_tiles/
+import_tiles_enemy/
+import_tiles_tools/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local env / scratch
 *.local
+.env
+.env.*
+
+# Editor and OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
