@@ -58,13 +58,11 @@ All pitches and features are judged against this rubric.
 ### Controls
 **Gamepad (NES mapping):**
 - A = jump (always)
-- B = context verb: whip when empty-handed; use held power when holding
-- Down + B = throw/discard
+- B = context verb: whip when empty-handed; activate the held object when holding (for many objects, activating means throwing it). No chords, no third button.
 - Sprites move smoothly (sub-tile positions) over a logical grid — grid for the level, pixels for the actors.
 
 **Touch (landscape):**
-- Virtual d-pad left zone, A/B buttons right zone.
-- Throw gets its own dedicated button on touch (diagonal chords don't survive glass). It appears only while holding something.
+- Virtual d-pad left zone, A/B buttons right zone. Same two buttons as the pad — touch gets no extra buttons.
 - To prototype: tap-to-whip-toward-touch-point as an alternative aiming scheme. Heresy for the homage; may be the difference between playable and good on phone. Both schemes can coexist.
 
 ---
@@ -164,7 +162,7 @@ Difficulty = the mix (early: mostly dexterity + one logistics beat; late: logist
 ### Layout (landscape phone, mocked up and approved)
 - Logical design floor: 360 × 800; typical 390–430 × 844–932 (CSS/logical px). Physical = logical × devicePixelRatio.
 - **Playfield: 28 × 21 tiles at 16 logical px = 448 × 336 (exactly 4:3).** 28 wide = Lode Runner width.
-- **~198 px thumb zones each side** (d-pad left; B/A right; contextual throw button appears while holding). HUD strip above: score left, **timer center**, held-item box right.
+- **~198 px thumb zones each side** (d-pad left; B/A right). HUD strip above: score left, **timer center**, held-item box right.
 - Keep critical action away from bottom corners of the playfield flanks (thumb occlusion).
 - Caution flagged: 16 logical px tiles ≈ 2.5 mm — crisp but small. Test on device before locking; 20 px tiles → 22 × 16 grid at the same 4:3 is the fallback.
 - Portrait alternative considered (13 wide × ~19 tall): set aside in favor of landscape, revisitable.
@@ -204,7 +202,7 @@ Difficulty = the mix (early: mostly dexterity + one logistics beat; late: logist
 - Strata-based vertical levels; random-ish generation + human curation + validators; AI-assisted semantic editing.
 - Reach-the-exit advancement (not kill-all).
 - Landscape phone layout, 28×21 grid @ 16 logical px, integer-scaled pixel art.
-- NES control mapping + touch adaptations (dedicated throw button).
+- NES control mapping: A = jump, B = context verb (whip empty-handed, activate held object when holding). Touch uses the same two buttons — no extras.
 
 ### Open questions
 - The enemy roster itself (only the rules in §4 are decided).
@@ -215,6 +213,7 @@ Difficulty = the mix (early: mostly dexterity + one logistics beat; late: logist
 - Exact ending greed-check at the burial chamber.
 - Final tile size (16 vs. 20 logical px) pending on-device test.
 - Tap-to-whip touch scheme vs. pure virtual buttons.
+- Discarding a held object without activating it: needed at all? If so, how — B is activate, and there is no chord or extra button to spend on discard. (Decide at Milestone 3 with the hold system.)
 - What ends a "run": fixed depth? endless? depth-loop with escalation?
 
 ### Rejected (with reasons — do not relitigate without new information)

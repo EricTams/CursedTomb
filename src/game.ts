@@ -17,13 +17,13 @@ const CLEAR_TICKS = Math.round(1.5 * TICK_HZ); // flash before auto-restart
 
 export class Game {
   private readonly level: Level;
-  private readonly input = new Input();
   private readonly player: Player;
   private clearedTimer = 0; // >0 while showing the CLEARED flash
 
   constructor(
     private readonly ctx: OffscreenCanvasRenderingContext2D,
     private readonly art: Art,
+    private readonly input: Input,
     levelAscii: string,
   ) {
     this.level = parseLevel(levelAscii);

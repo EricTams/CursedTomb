@@ -93,7 +93,8 @@ export class Player {
     }
 
     // Whip commits: on the ground it stops you; in the air it cuts steering.
-    if (input.whipPressed && !this.whipping) {
+    // (B is the context verb; with nothing held yet, B always means whip.)
+    if (input.bPressed && !this.whipping) {
       this.whipTicks = WHIP_TICKS;
       if (this.grounded) this.vx = 0;
       // Aim from keys held at the press. A held direction also turns the
@@ -137,14 +138,14 @@ export class Player {
 
     // Jump buffer: a press is stored briefly so landing a few ticks later
     // still fires the jump instead of eating the input.
-    if (input.jumpPressed) this.jumpBuffer = JUMP_BUFFER_TICKS;
+    if (input.aPressed) this.jumpBuffer = JUMP_BUFFER_TICKS;
     else if (this.jumpBuffer > 0) this.jumpBuffer--;
 
     // Down+jump on a one-way platform drops through instead of jumping.
     // Both are locked out mid-whip (the buffer keeps ticking, so a press
     // near the end of the whip still fires once it finishes).
     if (!this.whipping) {
-      if (this.grounded && input.down && input.jumpPressed && this.onPlatformOnly()) {
+      if (this.grounded && input.down && input.aPressed && this.onPlatformOnly()) {
         this.dropTicks = DROP_TICKS;
         this.grounded = false;
         this.coyote = 0;
@@ -159,7 +160,7 @@ export class Player {
         this.jumpBuffer = 0;
       }
     }
-    if (!input.jump && this.vy < JUMP_CUT) {
+    if (!input.a && this.vy < JUMP_CUT) {
       this.vy = JUMP_CUT;
     }
 
@@ -201,7 +202,7 @@ export class Player {
 
   private climb(input: Input): void {
     // Jump releases the ladder (works while holding any direction).
-    if (input.jumpPressed) {
+    if (input.aPressed) {
       this.climbing = false;
       this.regrabTicks = REGRAB_TICKS;
       this.vy = JUMP_VEL;

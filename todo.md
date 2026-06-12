@@ -24,7 +24,7 @@ at the appropriate milestone. Full design rationale lives in
 - [x] Init git repo and initial commit
 - [x] Push to GitHub, enable Pages (auto-enabled by the deploy workflow via
       `configure-pages` with `enablement: true`)
-- [ ] Verify deployed URL shows the scaled playfield on desktop and phone
+- [x] Verify deployed URL shows the scaled playfield on desktop and phone
 
 ## Milestone 1 — First simple level
 
@@ -46,11 +46,13 @@ at the appropriate milestone. Full design rationale lives in
 ## Milestone 2 — Controls
 
 - [ ] Abstract input layer emitting actions (game code never branches on device)
-- [ ] Keyboard: arrows/WASD + Z/X mapped to NES scheme — A = jump, B = context verb,
-      Down+B = throw
+- [ ] Keyboard: arrows/WASD + Z/X mapped to NES scheme — A = jump, B = context verb
+      (whip empty-handed; activates the held object when holding, which sometimes
+      means throwing it — no Down+B chord, no third button)
 - [ ] Touch (landscape): virtual d-pad left zone, A/B right zone (~198px thumb zones,
       §8 layout); shown only when touch is detected
-- [ ] Contextual throw button appears only while holding something
+- [ ] Touch d-pad supports diagonals (8-way sectors) with visual feedback: segments
+      show available directions and light up while active; A/B light while pressed
 - [ ] Whip stub on B so the controls can be felt
 - [ ] On-device phone test; settle the open 16px vs 20px tile size question
 
