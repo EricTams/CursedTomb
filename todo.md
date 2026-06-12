@@ -45,16 +45,19 @@ at the appropriate milestone. Full design rationale lives in
 
 ## Milestone 2 — Controls
 
-- [ ] Abstract input layer emitting actions (game code never branches on device)
-- [ ] Keyboard: arrows/WASD + Z/X mapped to NES scheme — A = jump, B = context verb
+- [x] Abstract input layer emitting actions (game code never branches on device)
+- [x] Keyboard: arrows/WASD + Z/X mapped to NES scheme — A = jump, B = context verb
       (whip empty-handed; activates the held object when holding, which sometimes
       means throwing it — no Down+B chord, no third button)
-- [ ] Touch (landscape): virtual d-pad left zone, A/B right zone (~198px thumb zones,
-      §8 layout); shown only when touch is detected
-- [ ] Touch d-pad supports diagonals (8-way sectors) with visual feedback: segments
-      show available directions and light up while active; A/B light while pressed
-- [ ] Whip stub on B so the controls can be felt
-- [ ] On-device phone test; settle the open 16px vs 20px tile size question
+- [x] Touch (landscape): virtual d-pad left zone, A/B right zone (~198px thumb zones,
+      §8 layout); shown only when touch is detected. Portrait pauses with a
+      rotate-to-landscape note (coarse-pointer devices only)
+- [x] Touch d-pad supports diagonals (8-way sectors) with visual feedback: segments
+      show available directions and light up while active; A/B light while pressed.
+      Continuous rotation (no hysteresis); A pulled inward off the camera edge
+- [x] Whip stub on B so the controls can be felt
+- [ ] On-device phone test passed for feel/layout; still open: settle the
+      16px vs 20px tile size question
 
 ## Milestone 3 — Enemies
 
