@@ -61,13 +61,34 @@ at the appropriate milestone. Full design rationale lives in
 
 ## Milestone 3 — Enemies
 
-- [ ] Design talk first: pick the first 1–2 roster entries using the §4 five-question
+- [x] Design talk first: pick the first 1–2 roster entries using the §4 five-question
       template and size tiers (Appendix A sketches are candidates, not canon)
-- [ ] Implement one fodder enemy (small tier: one whip hit kills)
-- [ ] Implement one grabbable enemy (person tier: stun → grab → hold → throw)
-- [ ] Whip core loop: stun, grab, hold suppresses whip, throw/discard, wake-up timer
+      — decided: **Virus** (fodder) + **Plant Box** (grabbable, pure ammo). Whip
+      never kills person tier (stun → grab); kills come from stomps or thrown
+      objects. Touch kills the player, instant restart. Template answers in §4.
+- [x] Implement one fodder enemy (small tier: one whip hit kills) — Virus,
+      edge-respecting floor patroller
+- [x] Implement one grabbable enemy (person tier: stun → grab → hold → throw)
+      — Plant Box: Box Form = stunned/carried, Get Up = wake-up telegraph
+- [x] Whip core loop: stun, grab, hold suppresses whip, throw/discard, wake-up timer
+      — stun 3s, held wake 8s (blinks last second); throw is flat, kills the first
+      enemy hit, shatters on walls. Stomp kills stunned enemies (whip never kills
+      person tier). Touch kills the player; ~0.8s blink then full restart.
+- [x] Eye exit guardian: lethal to touch, guards a long low corridor before
+      the door; spots the player at ~7 tiles (far outside whip range),
+      strobes while charging, then fires a horizontal bolt. One whip hit
+      kills it, but its range advantage makes the lash the daredevil route —
+      the safe kill is a thrown Plant Box lobbed from beyond its sight
+      (the game's first soft lock-and-key)
+- [x] Thrown enemies bounce off the ground Mario 2 style (two decaying bounces,
+      then shatter; walls still shatter immediately)
+- [x] First spawner (§5): Plant Box spawner replaces the placed box — a
+      grayscale darkened statue of the monster on the background layer;
+      one-alive cap; on vacancy it flashes ~2.5s and rebirths the enemy
+      (spawn holds while the player stands on the spot)
 
 ## Later (out of scope for now)
 
-Curse timer + treasure economy, spawners, strata-based level generation + validators,
-AI-assisted level editing, curse enemy family, swing/yank whip modes, attract mode.
+Curse timer + treasure economy, more spawner classes (destructible, §5),
+strata-based level generation + validators, AI-assisted level editing,
+curse enemy family, swing/yank whip modes, attract mode.

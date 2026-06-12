@@ -47,6 +47,10 @@ All pitches and features are judged against this rubric.
 - **Grab:** whip a stunned enemy again → yank it into your hands.
 - **Swing:** whip a grapple point → swing traversal.
 - **Yank:** whip treasure/objects to pull them to you from range.
+- **The whip never kills person-tier enemies** (Milestone 3 decision): killing a
+  stunned enemy takes a different damage source — stomp it, or hit it with a
+  thrown object. This keeps the whip's two hits unambiguous (stun, then grab)
+  and makes the stun state a real three-way choice: grab it, kill it, or leave it.
 
 ### Hold system (Mario 2 / Kirby / Klonoa lineage)
 - While holding an enemy, its power is active and **the whip is suppressed**. This is the central tension: picking up a power partially grounds you (no swing, no stun) for as long as you carry it.
@@ -69,7 +73,7 @@ All pitches and features are judged against this rubric.
 
 ## 4. Enemy design rules
 
-**NOTE: No specific enemies have been decided.** This section defines the framework. Appendix A contains illustrative sketches from brainstorming — they are examples of the rules in use, not a canon roster.
+**NOTE:** This section defines the framework. The first two roster entries (Virus, Plant Box) were decided at Milestone 3 — see "First roster entries" below. Appendix A contains illustrative sketches from brainstorming — examples of the rules in use, not a canon roster.
 
 ### The five-question template
 Every enemy must answer:
@@ -81,7 +85,7 @@ Every enemy must answer:
 
 ### Size tiers (the readability rule)
 - **Small (sub-tile) = dies.** One whip hit kills. Fodder/swarm enemies: threaten by pathing interference, never carry powers.
-- **Person-sized = stuns.** The grabbable tier. First hit stuns (grab window); **second hit while stunned kills.** Every grabbable has a "no thanks" option in the same verb.
+- **Person-sized = stuns.** The grabbable tier. First whip hit stuns (grab window); **second whip hit grabs — the whip never kills this tier.** Killing a stunned enemy takes a stomp or a thrown object; the "no thanks" option is simply leaving it to wake up. (Milestone 3 revision: an earlier draft said second-hit-while-stunned kills, which conflicted with §3's second-hit-grabs.)
 - **Big/armored = special condition.** Conditional stuns (e.g., behind-only), unkillables, bosses. Keep this tier tiny.
 
 Tier is readable from silhouette size alone.
@@ -92,6 +96,23 @@ Tier is readable from silhouette size alone.
 - **Power spectrum:** roster should span mobility sidegrades (compensate for the lost whip) through pure utility-at-mobility-cost to maximum-power/maximum-grounding. If every hold purely reduces mobility, holding always feels bad.
 - **Cursed recolors:** purple/black variants of base enemies reuse behavior rules with time-damage instead of body-damage. Doubles the roster via palette swap (the NES way). Open question: are cursed variants grabbable, and do their powers carry a curse tax (drain while held)? Current lean: yes-grabbable-with-tax.
 - **Roster size:** ~4 enemies (plus fodder and one curse entity) is a complete prototype. ~6 grabbables is likely the full-game budget.
+
+### First roster entries (decided at Milestone 3)
+
+Art source: the Aseprite sets in the review pool (Virus and Plant Box sprites, approved and copied to `assets/art/`).
+
+| | **Virus** (fodder, small tier) | **Plant Box** (grabbable, person tier) | **Eye** (guardian, special tier) |
+|---|---|---|---|
+| Threat rule | Patrols the floor, turning at walls and ledges; touching it kills | Sits dormant until it spots you (facing direction, same height band, line of sight); rouses with a beat of idle, walks its platform to the far end, turns around, and sits again. Touch while active kills | Stationary corridor guardian: spots intruders at ~7 tiles (far beyond whip range), strobes white while charging (~0.8 s), then fires a horizontal bolt; touching it or the bolt kills |
+| Held power | — (small tier is never held) | None — pure ammunition (keeps the first whip-loop implementation focused) | — (never stunned or held; one whip hit kills it, but its bolt range far exceeds whip range, so the lash is the daredevil's weapon here) |
+| Thrown | — | Flat shot with slight gravity; bounces twice off the ground, Mario 2 style, with decaying pop; kills the first enemy hit; shatters on walls or when the bounces are spent | — |
+| Lock answered | None | **The Eye** — a thrown box kills it from beyond its sight range | Soft lock on the exit corridor: the safe key is a thrown Plant Box; braving the bolts to whip it point-blank is the risk-it route |
+| Mobility price | — | Whip suppressed while held (the default cost only) | — |
+| Timers | — | Stun ~3 s (Box Form knocked upside down via a squash-flip; flips back upright, then the Get Up animation telegraphs the last second); held wake-up ~8 s | — |
+
+Player damage model for this milestone: **touch kills, instant restart** — no health,
+no knockback, matching the lives/fast-restart pillar. Stunned, held, and thrown
+enemies are harmless to touch.
 
 ### The curse family (purple/black = time damage)
 - One color rule teaches everything: **purple attacks your clock, everything else attacks your body.** Extends to traps, floor tiles, cursed chests (telegraphed by purple sheen — spotting them is a perception skill, not a gotcha).
@@ -108,6 +129,7 @@ Required key enemies come from **spawners** (Gauntlet generators, repurposed as 
 - **Spawned enemies pay nothing on death.** Kills farming with one rule. Wild-placed enemies may pay token time.
 - **Two classes:** indestructible spawners for main-path locks (the descent is unfailable by construction); destructible spawners for optional treasure locks (self-inflicted lockout via your own blast is fair arcade tragedy).
 - Emergent bonus: the spawner's live enemy defends its own lock area — puzzle and combat braided by one object.
+- **Status (Milestone 3):** first spawner implemented for the Plant Box. Look: a grayscale, darkened statue of the monster's sit pose on the background layer (the "visually matched landmark" rule, literally). One-alive cap; on vacancy it pulses bright for ~2.5 s, then the enemy materializes in front of the statue (held while the player occupies the spot, so nothing spawns inside anyone). Indestructible class only so far.
 
 ---
 
@@ -193,7 +215,9 @@ Difficulty = the mix (early: mostly dexterity + one logistics beat; late: logist
 ### Decided
 - Whip as the single core verb (stun / grab / swing / yank); hold suppresses whip; throw = discard.
 - Enemy powers ARE the item system (no inventory, no relics-in-chests).
-- Size-tier combat rule: small dies / medium stuns then second-hit kills / big is special.
+- Size-tier combat rule: small dies to one whip hit / medium: whip stuns then grabs, never kills — kill via stomp or thrown object / big is special.
+- First roster entries: Virus (fodder), Plant Box (grabbable, pure ammo), and the Eye (corridor-guardian turret — the first soft lock: out-ranges the whip, so the safe kill is a thrown Plant Box, the brave kill is a point-blank whip); see §4.
+- Player damage (Milestone 3): touch kills, instant restart; stunned/held/thrown enemies are harmless to touch.
 - Curse color rule: purple/black = time damage.
 - Key enemies come from spawners; one-alive cap; spawned enemies pay nothing.
 - Explicit countdown timer number in HUD; treasure adds time; visible +/− popups.
@@ -205,7 +229,7 @@ Difficulty = the mix (early: mostly dexterity + one logistics beat; late: logist
 - NES control mapping: A = jump, B = context verb (whip empty-handed, activate held object when holding). Touch uses the same two buttons — no extras.
 
 ### Open questions
-- The enemy roster itself (only the rules in §4 are decided).
+- The rest of the enemy roster (Virus and Plant Box are decided; the rules in §4 govern the rest).
 - One-way vs. two-way descent (lean: mostly one-way, whip allows one stratum of regret).
 - Fall damage: does falling past ~N tiles hurt? (Affects mobility-power value.)
 - Cursed-variant grabbability and curse tax (lean: grabbable with drain-while-held tax).

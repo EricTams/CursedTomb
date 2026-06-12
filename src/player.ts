@@ -39,6 +39,8 @@ export class Player {
   // (Bionic Commando style): horizontal, 45° up-forward, or straight up.
   whipDirX = 1;
   whipDirY = 0;
+  whipId = 0; // increments per swing so a hit registers once per enemy
+  holding = false; // set by the game while carrying an enemy (whip suppressed)
   private coyote = 0; // ticks left where a jump is still allowed after leaving ground
   private jumpBuffer = 0; // ticks left where a stored jump press can fire on landing
   private dropTicks = 0; // ticks left of falling through one-way platforms
@@ -64,10 +66,31 @@ export class Player {
     this.regrabTicks = 0;
     this.whipTicks = 0;
     this.facing = 1;
+    this.holding = false;
   }
 
   get whipping(): boolean {
     return this.whipTicks > 0;
+  }
+
+  // The lash segment from hand to tip for a given top-left position (pass the
+  // raw position for hit logic, the interpolated one for drawing).
+  whipSegment(
+    px: number,
+    py: number,
+  ): { x1: number; y1: number; x2: number; y2: number } | null {
+    if (!this.whipping) return null;
+    const ext = this.whipExtension();
+    // Hand sits on the player's edge in the aim direction (top for up,
+    // corner for diagonals, side at shoulder height for horizontal).
+    const x1 = px + PLAYER_W / 2 + (this.whipDirX * PLAYER_W) / 2;
+    const y1 = this.whipDirY < 0 ? py : py + 5;
+    return {
+      x1,
+      y1,
+      x2: x1 + this.whipDirX * ext * WHIP_RANGE,
+      y2: y1 + this.whipDirY * ext * WHIP_RANGE,
+    };
   }
 
   // 0..1 reach of the whip: unroll, crack at full reach, recoil.
@@ -93,9 +116,11 @@ export class Player {
     }
 
     // Whip commits: on the ground it stops you; in the air it cuts steering.
-    // (B is the context verb; with nothing held yet, B always means whip.)
-    if (input.bPressed && !this.whipping) {
+    // (B is the context verb: whip when empty-handed; while holding, the game
+    // consumes B as the throw, so the whip is suppressed here.)
+    if (input.bPressed && !this.whipping && !this.holding) {
       this.whipTicks = WHIP_TICKS;
+      this.whipId++;
       if (this.grounded) this.vx = 0;
       // Aim from keys held at the press. A held direction also turns the
       // player first, so left+whip while facing right whips left.

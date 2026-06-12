@@ -10,6 +10,11 @@ import { GRID_W, GRID_H } from "./config";
 //   H  ladder (climbable; its topmost tile is standable like a platform)
 //   -  one-way platform (solid from above only; down+jump drops through)
 //   P  player spawn (exactly one; stored as spawn, tile becomes background)
+//   v  Virus spawn (fodder enemy; stored as spawn, tile becomes background)
+//   b  Plant Box spawn (grabbable enemy; stored as spawn, tile becomes background)
+//   B  Plant Box spawner (statue landmark; respawns its enemy on vacancy, §5)
+//   e  Eye spawn (exit guardian; dies to whip or thrown enemy — but its
+//      bolt range far exceeds the whip, so closing in is the risky route)
 
 export enum Tile {
   Background = 0,
@@ -27,15 +32,33 @@ const LEGEND: Record<string, Tile> = {
   "-": Tile.Platform,
 };
 
+export type EnemyKind = "virus" | "plantbox" | "eye";
+
+export interface EnemySpawn {
+  kind: EnemyKind;
+  tx: number; // spawn tile coords
+  ty: number;
+}
+
 export class Level {
   readonly tiles: Tile[]; // row-major, GRID_W * GRID_H
   readonly spawnX: number; // spawn tile coords
   readonly spawnY: number;
+  readonly enemySpawns: readonly EnemySpawn[];
+  readonly spawnerSpawns: readonly EnemySpawn[];
 
-  constructor(tiles: Tile[], spawnX: number, spawnY: number) {
+  constructor(
+    tiles: Tile[],
+    spawnX: number,
+    spawnY: number,
+    enemySpawns: EnemySpawn[] = [],
+    spawnerSpawns: EnemySpawn[] = [],
+  ) {
     this.tiles = tiles;
     this.spawnX = spawnX;
     this.spawnY = spawnY;
+    this.enemySpawns = enemySpawns;
+    this.spawnerSpawns = spawnerSpawns;
   }
 
   tileAt(tx: number, ty: number): Tile {
@@ -80,6 +103,8 @@ export function parseLevel(ascii: string): Level {
   const tiles: Tile[] = new Array(GRID_W * GRID_H).fill(Tile.Background);
   let spawnX = -1;
   let spawnY = -1;
+  const enemySpawns: EnemySpawn[] = [];
+  const spawnerSpawns: EnemySpawn[] = [];
 
   for (let y = 0; y < GRID_H; y++) {
     if (rows[y].length !== GRID_W) {
@@ -95,6 +120,22 @@ export function parseLevel(ascii: string): Level {
         spawnY = y;
         continue; // spawn tile is background
       }
+      if (ch === "v") {
+        enemySpawns.push({ kind: "virus", tx: x, ty: y });
+        continue; // spawn tile is background
+      }
+      if (ch === "b") {
+        enemySpawns.push({ kind: "plantbox", tx: x, ty: y });
+        continue; // spawn tile is background
+      }
+      if (ch === "e") {
+        enemySpawns.push({ kind: "eye", tx: x, ty: y });
+        continue; // spawn tile is background
+      }
+      if (ch === "B") {
+        spawnerSpawns.push({ kind: "plantbox", tx: x, ty: y });
+        continue; // spawn tile is background
+      }
       const tile = LEGEND[ch];
       if (tile === undefined) {
         throw new Error(`Unknown tile '${ch}' at ${x},${y}`);
@@ -104,5 +145,5 @@ export function parseLevel(ascii: string): Level {
   }
 
   if (spawnX === -1) throw new Error("Level has no spawn 'P'");
-  return new Level(tiles, spawnX, spawnY);
+  return new Level(tiles, spawnX, spawnY, enemySpawns, spawnerSpawns);
 }
