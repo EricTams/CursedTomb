@@ -22,20 +22,26 @@ at the appropriate milestone. Full design rationale lives in
 - [x] Fixed-timestep update/render loop
 - [x] GitHub Actions workflow for Pages deploy
 - [x] Init git repo and initial commit
-- [ ] Push to GitHub, enable Pages (Settings > Pages > Source: GitHub Actions)
+- [x] Push to GitHub, enable Pages (auto-enabled by the deploy workflow via
+      `configure-pages` with `enablement: true`)
 - [ ] Verify deployed URL shows the scaled playfield on desktop and phone
 
 ## Milestone 1 — First simple level
 
-- [ ] ASCII level format + parser (28x21 grid with legend — same format the future
+- [x] ASCII level format + parser (28x21 grid with legend — same format the future
       generator and AI-edit loop will use)
-- [ ] Hand-author the first level: solid / background / exit tiles, simple descent
-- [ ] Player actor: gravity, walk, jump, AABB grid collision (sub-tile movement over grid)
-- [ ] Reach-the-exit win condition with fast restart (~2s loop)
-- [ ] Placeholder colored-rect art
-- [ ] **Art review session:** look at candidate tiles together (start with the
+- [x] Hand-author the first level: solid / background / exit tiles, simple descent
+- [x] Player actor: gravity, walk, jump, AABB grid collision (sub-tile movement over grid)
+- [x] Reach-the-exit win condition with fast restart (~2s loop)
+- [x] Placeholder colored-rect art
+- [x] **Art review session:** look at candidate tiles together (start with the
       `Old Stone` / `Carved Old Stone` / `Cave` / `Old Rock` sets), approve a tomb
       palette, copy pairs to `assets/art/`, swap into the level
+      — current palette: **Cube** tiles recovered from the old AutoPlatformer levels
+      (`Cube Block` solid, `Cube Ladder` / `Cube Platform` grabbed for later) on a
+      plain black background. The Old Stone family is approved and in `assets/art/`
+      but unused (BG-everywhere look was rejected). `Cave` / `Old Rock` remain
+      future deeper-strata candidates. Exit and player are placeholder rects.
 
 ## Milestone 2 — Controls
 
