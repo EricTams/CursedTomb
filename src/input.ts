@@ -11,6 +11,9 @@ export interface ActionState {
   a: boolean; // jump (always)
   b: boolean; // context verb: whip empty-handed, activate held object when holding
   restart: boolean;
+  map: boolean; // dev: toggle the reachability overlay
+  lightMode: boolean; // dev: toggle per-tile / per-pixel lighting
+  lightCurve: boolean; // dev: toggle linear / plateau (non-linear) lighting
 }
 
 export function emptyActions(): ActionState {
@@ -22,6 +25,9 @@ export function emptyActions(): ActionState {
     a: false,
     b: false,
     restart: false,
+    map: false,
+    lightMode: false,
+    lightCurve: false,
   };
 }
 
@@ -40,10 +46,16 @@ export class Input {
   b = false;
   bPressed = false;
   restartPressed = false;
+  mapPressed = false;
+  lightModePressed = false;
+  lightCurvePressed = false;
 
   private aWasDown = false;
   private bWasDown = false;
   private restartWasDown = false;
+  private mapWasDown = false;
+  private lightModeWasDown = false;
+  private lightCurveWasDown = false;
   private readonly sources: InputSource[] = [];
 
   addSource(source: InputSource): void {
@@ -59,6 +71,9 @@ export class Input {
     let a = false;
     let b = false;
     let restart = false;
+    let map = false;
+    let lightMode = false;
+    let lightCurve = false;
     for (const { actions } of this.sources) {
       left ||= actions.left;
       right ||= actions.right;
@@ -67,6 +82,9 @@ export class Input {
       a ||= actions.a;
       b ||= actions.b;
       restart ||= actions.restart;
+      map ||= actions.map;
+      lightMode ||= actions.lightMode;
+      lightCurve ||= actions.lightCurve;
     }
 
     this.left = left;
@@ -82,5 +100,11 @@ export class Input {
     this.bWasDown = b;
     this.restartPressed = restart && !this.restartWasDown;
     this.restartWasDown = restart;
+    this.mapPressed = map && !this.mapWasDown;
+    this.mapWasDown = map;
+    this.lightModePressed = lightMode && !this.lightModeWasDown;
+    this.lightModeWasDown = lightMode;
+    this.lightCurvePressed = lightCurve && !this.lightCurveWasDown;
+    this.lightCurveWasDown = lightCurve;
   }
 }

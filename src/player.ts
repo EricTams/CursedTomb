@@ -18,6 +18,20 @@ const REGRAB_TICKS = 10; // ladder ignored briefly after jumping off, so a held
 // Up doesn't instantly re-latch and eat the jump
 const WHIP_TICKS = 20; // full whip animation (~333ms)
 export const WHIP_RANGE = 40; // tip reach in px (2.5 tiles)
+const LAND_TICKS = 8; // brief "hitting ground" pose after a fall
+
+// --- Swing (grapple rings) ---
+// The lash latching within this distance of a ring's anchor starts a swing.
+// Generous on purpose: aim directions are quantized to 8 ways, so a tight
+// radius would make rings only hittable from exact standing spots.
+const LATCH_RADIUS = 10;
+const SWING_MIN_LEN = 8; // degenerate-rope floor when latching point-blank
+// Rope length is the latch distance minus this: the rope "goes taut" and
+// lifts slightly, which also unsticks a grounded latch from directly below.
+const SWING_TAUT_LIFT = 2;
+const SWING_PUMP = 0.002; // angular accel from held left/right (rad/tick^2)
+const SWING_MAX_TANGENT = 3.6; // tangential speed cap (px/tick)
+const SWING_IDLE_DAMPING = 0.998; // per-tick decay while no direction is held
 
 // AABB size: slightly narrower than a tile so 1-tile gaps are enterable.
 export const PLAYER_W = 12;
@@ -33,7 +47,18 @@ export class Player {
   vy = 0;
   grounded = false;
   climbing = false;
+  // Swing state: a rigid pendulum hung from a grapple ring. The rope attaches
+  // at the hand (top-center of the AABB); angle is measured from straight
+  // down, positive = hand on the anchor's right.
+  swinging = false;
+  swingAnchorX = 0;
+  swingAnchorY = 0;
+  private swingLen = 0;
+  private swingAngle = 0;
+  private swingVel = 0; // angular velocity (rad/tick)
   facing: 1 | -1 = 1;
+  animTick = 0; // drives looping sprite animations
+  private landTicks = 0; // counts down through the landing pose after a fall
   private whipTicks = 0; // counts down from WHIP_TICKS while the whip is out
   // Aim unit vector, captured from held keys when the whip fires
   // (Bionic Commando style): horizontal, 45° up-forward, or straight up.
@@ -67,10 +92,15 @@ export class Player {
     this.whipTicks = 0;
     this.facing = 1;
     this.holding = false;
+    this.swinging = false;
   }
 
   get whipping(): boolean {
     return this.whipTicks > 0;
+  }
+
+  get landing(): boolean {
+    return this.landTicks > 0;
   }
 
   // The lash segment from hand to tip for a given top-left position (pass the
@@ -105,13 +135,20 @@ export class Player {
   update(input: Input): void {
     this.prevX = this.x;
     this.prevY = this.y;
+    this.animTick++;
+    const wasGrounded = this.grounded;
     if (this.dropTicks > 0) this.dropTicks--;
     if (this.regrabTicks > 0) this.regrabTicks--;
+    if (this.landTicks > 0) this.landTicks--;
     if (this.whipTicks > 0) this.whipTicks--;
 
-    if (!this.climbing && !this.whipping) this.tryGrabLadder(input);
+    if (!this.climbing && !this.swinging && !this.whipping) this.tryGrabLadder(input);
     if (this.climbing) {
       this.climb(input);
+      return;
+    }
+    if (this.swinging) {
+      this.swing(input);
       return;
     }
 
@@ -138,20 +175,27 @@ export class Player {
       }
     }
 
-    // Horizontal: accelerate toward held direction, friction when idle.
-    // While whipping, input is ignored; airborne momentum is preserved
-    // (no friction) so an air whip doesn't kill the jump arc.
+    // Horizontal: accelerate toward held direction; friction only on the
+    // ground. Airborne momentum is preserved (no air drag), so a swing fling
+    // or an air whip keeps its arc; steering against it still decelerates.
+    // While whipping, input is ignored.
     const dir = this.whipping ? 0 : (input.right ? 1 : 0) - (input.left ? 1 : 0);
     if (dir !== 0) {
       this.facing = dir > 0 ? 1 : -1;
-      this.vx += dir * WALK_ACCEL;
-      this.vx = Math.max(-WALK_MAX, Math.min(WALK_MAX, this.vx));
-    } else if (this.whipping && !this.grounded) {
-      // keep vx as-is: no air-control, no air drag
-    } else if (this.vx > 0) {
-      this.vx = Math.max(0, this.vx - FRICTION);
-    } else if (this.vx < 0) {
-      this.vx = Math.min(0, this.vx + FRICTION);
+      const speedAlong = this.vx * dir; // signed speed in the held direction
+      let next: number;
+      if (speedAlong > WALK_MAX) {
+        // Excess momentum (a swing fling): holding into it never clamps it
+        // away — it carries in the air and bleeds off through ground friction
+        // back toward run speed after landing.
+        next = this.grounded ? Math.max(WALK_MAX, speedAlong - FRICTION) : speedAlong;
+      } else {
+        next = Math.min(speedAlong + WALK_ACCEL, WALK_MAX);
+      }
+      this.vx = next * dir;
+    } else if (this.grounded) {
+      if (this.vx > 0) this.vx = Math.max(0, this.vx - FRICTION);
+      else if (this.vx < 0) this.vx = Math.min(0, this.vx + FRICTION);
     }
 
     // Vertical: gravity, jump, variable height via early release.
@@ -191,6 +235,105 @@ export class Player {
 
     this.moveX(this.vx);
     this.moveY(this.vy);
+    if (this.grounded && !wasGrounded) this.landTicks = LAND_TICKS;
+
+    // The lash latching onto a grapple ring turns the whip into a rope.
+    if (this.whipping) this.tryLatch();
+  }
+
+  // --- Swing ---
+
+  // Latch when the live lash passes within LATCH_RADIUS of a ring's anchor.
+  // No grounded/airborne special case (it's the level designer's job to
+  // place rings where a grounded latch makes sense).
+  private tryLatch(): void {
+    const seg = this.whipSegment(this.x, this.y);
+    if (!seg) return;
+    for (const gp of this.level.grapplePoints) {
+      if (segmentPointDistance(seg, gp.x, gp.y) <= LATCH_RADIUS) {
+        this.enterSwing(gp.x, gp.y);
+        return;
+      }
+    }
+  }
+
+  private enterSwing(ax: number, ay: number): void {
+    const hx = this.x + PLAYER_W / 2;
+    const hy = this.y;
+    const dist = Math.hypot(hx - ax, hy - ay);
+    this.swingLen = Math.min(
+      Math.max(dist - SWING_TAUT_LIFT, SWING_MIN_LEN),
+      WHIP_RANGE,
+    );
+    this.swingAngle = Math.atan2(hx - ax, hy - ay);
+    // Carry momentum onto the arc: the tangential component of the current
+    // velocity becomes angular velocity, so an airborne latch keeps its arc.
+    this.swingVel =
+      (this.vx * Math.cos(this.swingAngle) - this.vy * Math.sin(this.swingAngle)) /
+      this.swingLen;
+    this.swingAnchorX = ax;
+    this.swingAnchorY = ay;
+    this.swinging = true;
+    this.whipTicks = 0; // the whip IS the rope now
+    this.grounded = false;
+    this.coyote = 0;
+    this.jumpBuffer = 0;
+  }
+
+  private swing(input: Input): void {
+    // A is the only exit: release with full tangential momentum. (It's the
+    // jump button, so the usual jump-cut caps upward speed if let go early.)
+    if (input.aPressed) {
+      this.releaseSwing();
+      return;
+    }
+
+    // Pendulum step: gravity torque plus an input pump (which can start a
+    // swing from rest after a grounded latch), capped by tangential speed.
+    const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    if (dir !== 0) this.facing = dir > 0 ? 1 : -1;
+    this.swingVel -= (GRAVITY / this.swingLen) * Math.sin(this.swingAngle);
+    if (dir !== 0) this.swingVel += dir * SWING_PUMP;
+    else this.swingVel *= SWING_IDLE_DAMPING;
+    const maxVel = SWING_MAX_TANGENT / this.swingLen;
+    this.swingVel = Math.max(-maxVel, Math.min(maxVel, this.swingVel));
+    const startAngle = this.swingAngle;
+    this.swingAngle += this.swingVel;
+
+    // Move along the arc with the normal solid sweeps. If a solid clamps the
+    // move, re-derive the pendulum from where we actually ended up: momentum
+    // dies on impact and the rope drags along surfaces instead of snapping.
+    const targetX =
+      this.swingAnchorX + Math.sin(this.swingAngle) * this.swingLen - PLAYER_W / 2;
+    const targetY = this.swingAnchorY + Math.cos(this.swingAngle) * this.swingLen;
+    this.moveX(targetX - this.x);
+    this.moveY(targetY - this.y);
+    if (Math.abs(this.x - targetX) > 0.01 || Math.abs(this.y - targetY) > 0.01) {
+      const actual = Math.atan2(
+        this.x + PLAYER_W / 2 - this.swingAnchorX,
+        this.y - this.swingAnchorY,
+      );
+      this.swingVel = angleDiff(actual, startAngle);
+      this.swingAngle = actual;
+    }
+  }
+
+  private releaseSwing(): void {
+    // Tangential direction of the hand's circular motion.
+    this.vx = Math.cos(this.swingAngle) * this.swingVel * this.swingLen;
+    this.vy = -Math.sin(this.swingAngle) * this.swingVel * this.swingLen;
+    this.swinging = false;
+    this.coyote = 0;
+    this.jumpBuffer = 0;
+  }
+
+  // Rope attachment point (the hand), for the renderer.
+  handX(alpha: number): number {
+    return this.drawX(alpha) + PLAYER_W / 2;
+  }
+
+  handY(alpha: number): number {
+    return this.drawY(alpha);
   }
 
   // --- Ladders ---
@@ -343,4 +486,28 @@ export class Player {
   drawY(alpha: number): number {
     return this.prevY + (this.y - this.prevY) * alpha;
   }
+}
+
+// Distance from a segment to a point, for the ring latch test.
+function segmentPointDistance(
+  seg: { x1: number; y1: number; x2: number; y2: number },
+  px: number,
+  py: number,
+): number {
+  const dx = seg.x2 - seg.x1;
+  const dy = seg.y2 - seg.y1;
+  const lenSq = dx * dx + dy * dy;
+  const t =
+    lenSq === 0
+      ? 0
+      : Math.max(0, Math.min(1, ((px - seg.x1) * dx + (py - seg.y1) * dy) / lenSq));
+  return Math.hypot(px - (seg.x1 + t * dx), py - (seg.y1 + t * dy));
+}
+
+// Signed shortest angular difference a - b, wrapped to (-PI, PI].
+function angleDiff(a: number, b: number): number {
+  let d = a - b;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
 }

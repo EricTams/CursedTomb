@@ -44,8 +44,12 @@ All pitches and features are judged against this rubric.
 
 ### The whip (the one verb)
 - **Stun:** whip a stunnable enemy → brief stun window.
-- **Grab:** whip a stunned enemy again → yank it into your hands.
-- **Swing:** whip a grapple point → swing traversal.
+- **Grab:** whip a stunned enemy again → yank it into your hands (Milestone 4:
+  a short reel-in pull, not a teleport — the same pull treasure will use).
+- **Swing:** whip a grapple point → swing traversal. (Milestone 4: the lash
+  crossing near a ring latches — grounded or airborne, no special case; rigid
+  pendulum on a rope fixed at latch distance; left/right pumps; A releases
+  with full momentum and is the only exit.)
 - **Yank:** whip treasure/objects to pull them to you from range.
 - **The whip never kills person-tier enemies** (Milestone 3 decision): killing a
   stunned enemy takes a different damage source — stomp it, or hit it with a
@@ -218,6 +222,8 @@ Difficulty = the mix (early: mostly dexterity + one logistics beat; late: logist
 - Size-tier combat rule: small dies to one whip hit / medium: whip stuns then grabs, never kills — kill via stomp or thrown object / big is special.
 - First roster entries: Virus (fodder), Plant Box (grabbable, pure ammo), and the Eye (corridor-guardian turret — the first soft lock: out-ranges the whip, so the safe kill is a thrown Plant Box, the brave kill is a point-blank whip); see §4.
 - Player damage (Milestone 3): touch kills, instant restart; stunned/held/thrown enemies are harmless to touch.
+- Swing (Milestone 4): grapple rings are level tiles (`*`); any whip lash passing within a few px of a ring latches and starts a swing — grounded or airborne, no special case (ring placement is the level designer's problem). Rigid pendulum: rope length fixed at latch (minus a small taut-lift, clamped to whip range), gravity-driven, left/right pumps from rest, solids kill momentum and the rope drags along surfaces. A is the only exit: release with full tangential momentum, jump-cut on early release. Holding an enemy suppresses the whip, so carrying already costs the swing (§3 tension).
+- Yank (Milestone 4): the grab is a short reel-in pull (~0.1 s, harmless in flight), not a teleport; the same pull will serve treasure later.
 - Curse color rule: purple/black = time damage.
 - Key enemies come from spawners; one-alive cap; spawned enemies pay nothing.
 - Explicit countdown timer number in HUD; treasure adds time; visible +/− popups.

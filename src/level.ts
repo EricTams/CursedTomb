@@ -1,4 +1,4 @@
-import { GRID_W, GRID_H } from "./config";
+import { TILE, GRID_W, GRID_H } from "./config";
 
 // ASCII level format — the same text representation the future generator and
 // AI-edit loop will consume (design doc §6): GRID_H rows of GRID_W chars.
@@ -15,6 +15,8 @@ import { GRID_W, GRID_H } from "./config";
 //   B  Plant Box spawner (statue landmark; respawns its enemy on vacancy, §5)
 //   e  Eye spawn (exit guardian; dies to whip or thrown enemy — but its
 //      bolt range far exceeds the whip, so closing in is the risky route)
+//   *  grapple ring (whip latch point for swinging; tile itself is background)
+//   L  light statue (a static light source; tile itself is background)
 
 export enum Tile {
   Background = 0,
@@ -40,12 +42,32 @@ export interface EnemySpawn {
   ty: number;
 }
 
+// Whip latch point for swinging. The anchor is the tile's center in
+// playfield pixels — what the lash tests against and the rope hangs from.
+export interface GrapplePoint {
+  tx: number;
+  ty: number;
+  x: number; // anchor pixel coords
+  y: number;
+}
+
+// Static light source placed in the level. x/y are the tile center in
+// playfield pixels (where the emitted light is centered).
+export interface LightStatue {
+  tx: number;
+  ty: number;
+  x: number;
+  y: number;
+}
+
 export class Level {
   readonly tiles: Tile[]; // row-major, GRID_W * GRID_H
   readonly spawnX: number; // spawn tile coords
   readonly spawnY: number;
   readonly enemySpawns: readonly EnemySpawn[];
   readonly spawnerSpawns: readonly EnemySpawn[];
+  readonly grapplePoints: readonly GrapplePoint[];
+  readonly lightStatues: readonly LightStatue[];
 
   constructor(
     tiles: Tile[],
@@ -53,12 +75,16 @@ export class Level {
     spawnY: number,
     enemySpawns: EnemySpawn[] = [],
     spawnerSpawns: EnemySpawn[] = [],
+    grapplePoints: GrapplePoint[] = [],
+    lightStatues: LightStatue[] = [],
   ) {
     this.tiles = tiles;
     this.spawnX = spawnX;
     this.spawnY = spawnY;
     this.enemySpawns = enemySpawns;
     this.spawnerSpawns = spawnerSpawns;
+    this.grapplePoints = grapplePoints;
+    this.lightStatues = lightStatues;
   }
 
   tileAt(tx: number, ty: number): Tile {
@@ -105,6 +131,8 @@ export function parseLevel(ascii: string): Level {
   let spawnY = -1;
   const enemySpawns: EnemySpawn[] = [];
   const spawnerSpawns: EnemySpawn[] = [];
+  const grapplePoints: GrapplePoint[] = [];
+  const lightStatues: LightStatue[] = [];
 
   for (let y = 0; y < GRID_H; y++) {
     if (rows[y].length !== GRID_W) {
@@ -136,6 +164,24 @@ export function parseLevel(ascii: string): Level {
         spawnerSpawns.push({ kind: "plantbox", tx: x, ty: y });
         continue; // spawn tile is background
       }
+      if (ch === "*") {
+        grapplePoints.push({
+          tx: x,
+          ty: y,
+          x: x * TILE + TILE / 2,
+          y: y * TILE + TILE / 2,
+        });
+        continue; // ring tile is background
+      }
+      if (ch === "L") {
+        lightStatues.push({
+          tx: x,
+          ty: y,
+          x: x * TILE + TILE / 2,
+          y: y * TILE + TILE / 2,
+        });
+        continue; // statue tile is background
+      }
       const tile = LEGEND[ch];
       if (tile === undefined) {
         throw new Error(`Unknown tile '${ch}' at ${x},${y}`);
@@ -145,5 +191,13 @@ export function parseLevel(ascii: string): Level {
   }
 
   if (spawnX === -1) throw new Error("Level has no spawn 'P'");
-  return new Level(tiles, spawnX, spawnY, enemySpawns, spawnerSpawns);
+  return new Level(
+    tiles,
+    spawnX,
+    spawnY,
+    enemySpawns,
+    spawnerSpawns,
+    grapplePoints,
+    lightStatues,
+  );
 }

@@ -13,12 +13,15 @@
 // the corridor; walking the full hallway is a hopeless race. Kill it with a
 // thrown Plant Box (its bounces skim the whole corridor); a missed throw
 // only costs the walk back to the spawner.
+//
+// Grapple rings are introduced in level 2 — none here, so the Milestone 3
+// loop (whip/grab/throw vs. the Eye) stays the whole lesson of this level.
 export const LEVEL_1 = `
 ############################
 #..........................#
 #.P........................#
 ######.....................#
-#..........................#
+#...........L..............#
 #..........####............#
 #..................v.......#
 #.................######...#
@@ -30,7 +33,7 @@ export const LEVEL_1 = `
 #..H.......................#
 #..H.----..................#
 #..H.......................#
-#..H.......................#
+#..H.....................L.#
 #..H####......##############
 #..H.......................#
 #..H.......v............eE.#

@@ -50,8 +50,13 @@ export type EnemyState =
   | "waiting" // sitting dormant until the player crosses its field of view
   | "rousing" // spotted the player: a beat of idle before it starts walking
   | "stunned"
+  | "yanked" // mid-pull: flying to the player's hands (harmless in flight)
   | "held"
   | "thrown";
+
+// The yank: a grabbed enemy is reeled to the hands over a short tween rather
+// than teleporting. Same pull that treasure will use later (design doc §3).
+const YANK_TICKS = 6;
 
 const ROUSE_TICKS = 30; // the idle beat between spotting and walking (~0.5s)
 
@@ -81,6 +86,7 @@ export class Enemy {
   stunTicks = 0; // counts down while stunned
   stunDuration = 0; // full length of the current stun (for the flip phases)
   heldTicks = 0; // counts down while held
+  private yankTicks = 0; // counts down while being reeled in
   rouseTicks = 0; // counts down through the idle beat after a sighting
   private bounces = 0; // ground bounces used up while thrown
   animTick = 0;
@@ -165,6 +171,27 @@ export class Enemy {
     this.vx = 0;
     this.vy = 0;
     this.hitFlash = HIT_FLASH_TICKS;
+  }
+
+  // Second whip hit on a stunned enemy: start reeling it to the hands.
+  startYank(): void {
+    this.state = "yanked";
+    this.yankTicks = YANK_TICKS;
+    this.vx = 0;
+    this.vy = 0;
+    this.hitFlash = HIT_FLASH_TICKS;
+  }
+
+  // The game drives the pull each tick toward the (moving) carry spot:
+  // close 1/remaining of the gap per tick, which lands exactly on time.
+  // Becomes held on arrival.
+  yankToward(centerX: number, bottomY: number): void {
+    const tx = centerX - this.w / 2;
+    const ty = bottomY - this.h;
+    const t = 1 / this.yankTicks;
+    this.x += (tx - this.x) * t;
+    this.y += (ty - this.y) * t;
+    if (--this.yankTicks <= 0) this.grab();
   }
 
   // Carried position: game calls this every tick while held.
@@ -282,6 +309,10 @@ export class Enemy {
           this.state = this.kind === "plantbox" ? "waiting" : "patrol";
           this.animTick = 0;
         }
+        return false;
+      }
+      case "yanked": {
+        // Position is driven by the game (yankToward); nothing to do here.
         return false;
       }
       case "held": {

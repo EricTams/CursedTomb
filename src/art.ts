@@ -1,51 +1,78 @@
 // Approved art lives in assets/art/ (PNG + Aseprite JSON pairs) — the only
 // folder the game loads from. Vite turns these imports into hashed URLs.
 //
-// Current palette: "Cube" tiles recovered from the old AutoPlatformer levels
-// (Weird Random Cubes set) on a plain black background. The Old Stone family
-// also lives in assets/art/, approved but currently unused.
-import solidUrl from "../assets/art/Cube Block.png";
-import ladderUrl from "../assets/art/Cube Ladder.png";
-import platformUrl from "../assets/art/Cube Platform.png";
+// Current palette: the "Tileset" stone set plus the new creature/player roster
+// (Snake, Large Troll, Dart Cannon, Player) and the Light Statue.
+import solidUrl from "../assets/art/Tileset-Tile.png";
+import ladderUrl from "../assets/art/Tileset-Ladder.png";
+import platformUrl from "../assets/art/Tileset-Platform.png";
 
-// Milestone 3 enemies (approved at the roster design talk).
-import virusUrl from "../assets/art/Virus-Red.png";
-import virusJson from "../assets/art/Virus-Red.json";
-import plantWalkUrl from "../assets/art/Plant Box-Walk.png";
-import plantWalkJson from "../assets/art/Plant Box-Walk.json";
-import plantIdleUrl from "../assets/art/Plant Box-Idle.png";
-import plantIdleJson from "../assets/art/Plant Box-Idle.json";
-import plantBoxFormUrl from "../assets/art/Plant Box-Box Form.png";
-import plantBoxFormJson from "../assets/art/Plant Box-Box Form.json";
-import plantGetUpUrl from "../assets/art/Plant Box-Get Up.png";
-import plantGetUpJson from "../assets/art/Plant Box-Get Up.json";
-import plantSitUrl from "../assets/art/Plant Box-Sit.png";
-import plantSitJson from "../assets/art/Plant Box-Sit.json";
-import eyeOpenUrl from "../assets/art/Eye-Open.png";
-import eyeOpenJson from "../assets/art/Eye-Open.json";
-import eyeOpeningUrl from "../assets/art/Eye-Opening.png";
-import eyeOpeningJson from "../assets/art/Eye-Opening.json";
-import eyeClosingUrl from "../assets/art/Eye-Closing.png";
-import eyeClosingJson from "../assets/art/Eye-Closing.json";
-import eyeClosedUrl from "../assets/art/Eye-Closed.png";
-import eyeClosedJson from "../assets/art/Eye-Closed.json";
+// Enemies (reskinned onto the existing behaviors):
+//   walker = Snake, grabbable/throwable + spawner = Large Troll,
+//   stationary shooter = Dart Cannon (fires Darts).
+import snakeUrl from "../assets/art/Snake-Walk.png";
+import snakeJson from "../assets/art/Snake-Walk.json";
+import trollUrl from "../assets/art/Large Troll-Walk.png";
+import trollJson from "../assets/art/Large Troll-Walk.json";
+import trollHitUrl from "../assets/art/Large Troll-Hit.png";
+import trollHitJson from "../assets/art/Large Troll-Hit.json";
+import cannonIdleUrl from "../assets/art/Dart Cannon-Idle.png";
+import cannonIdleJson from "../assets/art/Dart Cannon-Idle.json";
+import cannonShootUrl from "../assets/art/Dart Cannon-Shoot.png";
+import cannonShootJson from "../assets/art/Dart Cannon-Shoot.json";
+import dartUrl from "../assets/art/Dart-Fly.png";
+import dartJson from "../assets/art/Dart-Fly.json";
+import dartBoomUrl from "../assets/art/Dart Explosion-Explosion.png";
+import dartBoomJson from "../assets/art/Dart Explosion-Explosion.json";
+
+// Player animation set.
+import playerStillUrl from "../assets/art/Player-Still.png";
+import playerStillJson from "../assets/art/Player-Still.json";
+import playerWalkUrl from "../assets/art/Player-Walk.png";
+import playerWalkJson from "../assets/art/Player-Walk.json";
+import playerJumpUrl from "../assets/art/Player-Jump Up.png";
+import playerJumpJson from "../assets/art/Player-Jump Up.json";
+import playerFallUrl from "../assets/art/Player-Fall Down.png";
+import playerFallJson from "../assets/art/Player-Fall Down.json";
+import playerUpUrl from "../assets/art/Player-Up.png";
+import playerUpJson from "../assets/art/Player-Up.json";
+import playerDownUrl from "../assets/art/Player-Down.png";
+import playerDownJson from "../assets/art/Player-Down.json";
+import playerUseUrl from "../assets/art/Player-Use.png";
+import playerUseJson from "../assets/art/Player-Use.json";
+import playerLandUrl from "../assets/art/Player-Hitting Ground.png";
+import playerLandJson from "../assets/art/Player-Hitting Ground.json";
+
+// Light source.
+import lightStatueOnUrl from "../assets/art/Light Statue-On.png";
+import lightStatueOnJson from "../assets/art/Light Statue-On.json";
 
 import { Sprite, AsepriteSheet } from "./sprite";
+
+export interface PlayerArt {
+  still: Sprite;
+  walk: Sprite;
+  jumpUp: Sprite;
+  fallDown: Sprite;
+  up: Sprite; // ladder climb (ascending)
+  down: Sprite; // ladder climb (descending)
+  use: Sprite; // whip / activate
+  land: Sprite; // brief landing pose
+}
 
 export interface Art {
   solid: HTMLImageElement;
   ladder: HTMLImageElement;
   platform: HTMLImageElement;
-  virus: Sprite;
-  plantWalk: Sprite;
-  plantIdle: Sprite;
-  plantBoxForm: Sprite; // stunned / held / thrown (folded into its box)
-  plantGetUp: Sprite; // wake-up telegraph
-  plantSit: Sprite; // dormant watcher pose (sit-down transition, hold last)
-  eyeOpen: Sprite; // exit guardian: open stare plus a periodic blink cycle
-  eyeOpening: Sprite;
-  eyeClosing: Sprite;
-  eyeClosed: Sprite;
+  snake: Sprite; // walker (was Virus)
+  troll: Sprite; // grabbable/throwable walker (was Plant Box)
+  trollHit: Sprite; // hurt/folded pose for stun/held/thrown
+  cannonIdle: Sprite; // shooter stare (was Eye)
+  cannonShoot: Sprite; // shooter charge/fire
+  dart: Sprite; // the fired projectile (was the bolt)
+  dartBoom: Sprite; // dart impact burst
+  player: PlayerArt;
+  lightStatueOn: Sprite;
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -66,44 +93,64 @@ export async function loadArt(): Promise<Art> {
     solid,
     ladder,
     platform,
-    virus,
-    plantWalk,
-    plantIdle,
-    plantBoxForm,
-    plantGetUp,
-    plantSit,
-    eyeOpen,
-    eyeOpening,
-    eyeClosing,
-    eyeClosed,
+    snake,
+    troll,
+    trollHit,
+    cannonIdle,
+    cannonShoot,
+    dart,
+    dartBoom,
+    playerStill,
+    playerWalk,
+    playerJump,
+    playerFall,
+    playerUp,
+    playerDown,
+    playerUse,
+    playerLand,
+    lightStatueOn,
   ] = await Promise.all([
     loadImage(solidUrl),
     loadImage(ladderUrl),
     loadImage(platformUrl),
-    loadSprite(virusUrl, virusJson),
-    loadSprite(plantWalkUrl, plantWalkJson),
-    loadSprite(plantIdleUrl, plantIdleJson),
-    loadSprite(plantBoxFormUrl, plantBoxFormJson),
-    loadSprite(plantGetUpUrl, plantGetUpJson),
-    loadSprite(plantSitUrl, plantSitJson),
-    loadSprite(eyeOpenUrl, eyeOpenJson),
-    loadSprite(eyeOpeningUrl, eyeOpeningJson),
-    loadSprite(eyeClosingUrl, eyeClosingJson),
-    loadSprite(eyeClosedUrl, eyeClosedJson),
+    loadSprite(snakeUrl, snakeJson),
+    loadSprite(trollUrl, trollJson),
+    loadSprite(trollHitUrl, trollHitJson),
+    loadSprite(cannonIdleUrl, cannonIdleJson),
+    loadSprite(cannonShootUrl, cannonShootJson),
+    loadSprite(dartUrl, dartJson),
+    loadSprite(dartBoomUrl, dartBoomJson),
+    loadSprite(playerStillUrl, playerStillJson),
+    loadSprite(playerWalkUrl, playerWalkJson),
+    loadSprite(playerJumpUrl, playerJumpJson),
+    loadSprite(playerFallUrl, playerFallJson),
+    loadSprite(playerUpUrl, playerUpJson),
+    loadSprite(playerDownUrl, playerDownJson),
+    loadSprite(playerUseUrl, playerUseJson),
+    loadSprite(playerLandUrl, playerLandJson),
+    loadSprite(lightStatueOnUrl, lightStatueOnJson),
   ]);
   return {
     solid,
     ladder,
     platform,
-    virus,
-    plantWalk,
-    plantIdle,
-    plantBoxForm,
-    plantGetUp,
-    plantSit,
-    eyeOpen,
-    eyeOpening,
-    eyeClosing,
-    eyeClosed,
+    snake,
+    troll,
+    trollHit,
+    cannonIdle,
+    cannonShoot,
+    dart,
+    dartBoom,
+    player: {
+      still: playerStill,
+      walk: playerWalk,
+      jumpUp: playerJump,
+      fallDown: playerFall,
+      up: playerUp,
+      down: playerDown,
+      use: playerUse,
+      land: playerLand,
+    },
+    lightStatueOn,
   };
 }

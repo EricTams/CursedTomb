@@ -1,0 +1,34 @@
+---
+description: When the agent may author levels vs. revise them for solvability
+alwaysApply: true
+---
+
+# Level Authoring vs. Solvability Revision
+
+Authoring a level and iterating on it for solvability are TWO separate
+permissions. You have the first by default. You do NOT have the second unless
+the user grants it explicitly, in this task.
+
+Revising a level for solvability is a known degenerate condition: it sends the
+agent into a death spiral of reachability tweaks. Treat it as off-limits until
+told otherwise.
+
+## Rules
+
+1. You MAY create or edit a level's layout when asked.
+2. After authoring, you MAY run the reachability sim ONCE to report the result
+   as information (reachable / not reachable, where it fails).
+3. You MUST NOT change the level to "fix" solvability, reachability, jump arcs,
+   ring placement, or difficulty unless the user has explicitly told you, in
+   this task, that you are allowed to revise it.
+4. If the sim shows a level is unsolvable, STOP and report it. Do not start
+   tweaking. Ask whether you should revise.
+
+## Concrete
+
+- Allowed (unprompted): "Built the level. Sim says the exit is unreachable on
+  foot and reachable via the ring. Want me to adjust anything?" -> then STOP.
+- Not allowed (unprompted): moving the ring/ledges/gap and re-running the sim
+  in a loop to make the exit reachable.
+
+When in doubt about whether you may revise, ask before editing.

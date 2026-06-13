@@ -40,9 +40,18 @@ export class KeyboardSource implements InputSource {
       case "KeyJ":
         this.actions.b = down;
         break;
-      // Dev convenience, not part of the NES scheme (touch has no equivalent).
+      // Dev conveniences, not part of the NES scheme (touch has no equivalent).
       case "KeyR":
         this.actions.restart = down;
+        break;
+      case "KeyM":
+        this.actions.map = down;
+        break;
+      case "KeyL":
+        this.actions.lightMode = down;
+        break;
+      case "KeyN":
+        this.actions.lightCurve = down;
         break;
       default:
         return;

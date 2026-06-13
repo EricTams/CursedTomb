@@ -87,8 +87,28 @@ at the appropriate milestone. Full design rationale lives in
       one-alive cap; on vacancy it flashes ~2.5s and rebirths the enemy
       (spawn holds while the player stands on the spot)
 
+## Milestone 4 — Swing and yank whip modes
+
+- [x] Grapple rings as level tiles (`*` in the ASCII legend, anchor = tile
+      center, background layer); two placed in level 1 — one above the row-9
+      ledge, one in the row-17 drop gap as a route back out of the pit
+- [x] Swing: whip lash latching within ~10px of a ring's anchor turns the whip
+      into a rope — grounded or airborne, no special case (ring placement is
+      the level designer's job). Rigid pendulum, rope length = latch distance
+      minus a small taut-lift (clamped to whip range); gravity drives it;
+      held left/right pumps (works from rest); solids kill momentum and the
+      rope drags along surfaces instead of snapping; A is the only exit and
+      releases with full tangential momentum (jump-cut applies). Holding an
+      enemy suppresses the whip, so no-swing-while-carrying falls out free
+- [x] Placeholder gold-ring rendering + taut rope line while swinging
+      (ring art pending a review session)
+- [x] Yank: the second whip hit reels a stunned enemy to the hands over a
+      short pull (~6 ticks, harmless in flight) instead of teleporting it —
+      the same pull treasure will use later
+- [ ] On-device phone test for swing feel (no new buttons: B whips, A releases)
+
 ## Later (out of scope for now)
 
 Curse timer + treasure economy, more spawner classes (destructible, §5),
 strata-based level generation + validators, AI-assisted level editing,
-curse enemy family, swing/yank whip modes, attract mode.
+curse enemy family, attract mode, grapple-ring art review.

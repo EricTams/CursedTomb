@@ -3,7 +3,7 @@
 # Run from anywhere: powershell -File tools/generate-art-manifest.ps1
 
 $root = Split-Path $PSScriptRoot -Parent
-$folders = @(Get-ChildItem $root -Directory | Where-Object { $_.Name -like "import_tiles*" -or $_.Name -eq "assets" } | Sort-Object Name)
+$folders = @(Get-ChildItem $root -Directory | Where-Object { $_.Name -like "import_tiles*" -or $_.Name -eq "import_new" -or $_.Name -eq "assets" } | Sort-Object Name)
 
 $out = @()
 $out += "# Art Asset Manifest"

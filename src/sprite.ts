@@ -122,6 +122,33 @@ export class Sprite {
     return this.frames.length - 1;
   }
 
+  // Total loop length in ticks — handy for sizing one-shot effects.
+  get durationTicks(): number {
+    return this.totalTicks;
+  }
+
+  // Draw a frame centered on (cx, cy). Used for projectiles and burst effects
+  // where bottom-center anchoring doesn't apply.
+  drawCentered(
+    ctx: OffscreenCanvasRenderingContext2D,
+    frameIndex: number,
+    cx: number,
+    cy: number,
+    flip = false,
+  ): void {
+    const f = this.frames[frameIndex];
+    const dx = Math.round(cx - f.sw / 2);
+    const dy = Math.round(cy - f.sh / 2);
+    if (!flip) {
+      ctx.drawImage(this.image, f.sx, f.sy, f.sw, f.sh, dx, dy, f.sw, f.sh);
+      return;
+    }
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(this.image, f.sx, f.sy, f.sw, f.sh, -dx - f.sw, dy, f.sw, f.sh);
+    ctx.restore();
+  }
+
   // Draw a frame with its bottom-center at (anchorX, anchorY).
   // flip=true mirrors horizontally around the anchor.
   // scaleY squashes the sprite vertically toward the anchor; negative values
