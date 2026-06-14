@@ -14,6 +14,8 @@ export interface ActionState {
   map: boolean; // dev: toggle the reachability overlay
   lightMode: boolean; // dev: toggle per-tile / per-pixel lighting
   lightCurve: boolean; // dev: toggle linear / plateau (non-linear) lighting
+  prevLevel: boolean; // dev: jump to the previous level
+  nextLevel: boolean; // dev: jump to the next level
 }
 
 export function emptyActions(): ActionState {
@@ -28,6 +30,8 @@ export function emptyActions(): ActionState {
     map: false,
     lightMode: false,
     lightCurve: false,
+    prevLevel: false,
+    nextLevel: false,
   };
 }
 
@@ -49,6 +53,8 @@ export class Input {
   mapPressed = false;
   lightModePressed = false;
   lightCurvePressed = false;
+  prevLevelPressed = false;
+  nextLevelPressed = false;
 
   private aWasDown = false;
   private bWasDown = false;
@@ -56,6 +62,8 @@ export class Input {
   private mapWasDown = false;
   private lightModeWasDown = false;
   private lightCurveWasDown = false;
+  private prevLevelWasDown = false;
+  private nextLevelWasDown = false;
   private readonly sources: InputSource[] = [];
 
   addSource(source: InputSource): void {
@@ -74,6 +82,8 @@ export class Input {
     let map = false;
     let lightMode = false;
     let lightCurve = false;
+    let prevLevel = false;
+    let nextLevel = false;
     for (const { actions } of this.sources) {
       left ||= actions.left;
       right ||= actions.right;
@@ -85,6 +95,8 @@ export class Input {
       map ||= actions.map;
       lightMode ||= actions.lightMode;
       lightCurve ||= actions.lightCurve;
+      prevLevel ||= actions.prevLevel;
+      nextLevel ||= actions.nextLevel;
     }
 
     this.left = left;
@@ -106,5 +118,9 @@ export class Input {
     this.lightModeWasDown = lightMode;
     this.lightCurvePressed = lightCurve && !this.lightCurveWasDown;
     this.lightCurveWasDown = lightCurve;
+    this.prevLevelPressed = prevLevel && !this.prevLevelWasDown;
+    this.prevLevelWasDown = prevLevel;
+    this.nextLevelPressed = nextLevel && !this.nextLevelWasDown;
+    this.nextLevelWasDown = nextLevel;
   }
 }

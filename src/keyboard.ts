@@ -53,6 +53,13 @@ export class KeyboardSource implements InputSource {
       case "KeyN":
         this.actions.lightCurve = down;
         break;
+      // Dev: step to the previous / next level.
+      case "Minus":
+        this.actions.prevLevel = down;
+        break;
+      case "Equal":
+        this.actions.nextLevel = down;
+        break;
       default:
         return;
     }

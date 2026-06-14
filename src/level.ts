@@ -15,6 +15,8 @@ import { TILE, GRID_W, GRID_H } from "./config";
 //   B  Plant Box spawner (statue landmark; respawns its enemy on vacancy, §5)
 //   e  Eye spawn (exit guardian; dies to whip or thrown enemy — but its
 //      bolt range far exceeds the whip, so closing in is the risky route)
+//   a  Bat spawn (ceiling-roosting flyer; swoops in a parabolic arc when the
+//      player nears, reverses on walls, re-roosts at a ceiling; one whip kills)
 //   *  grapple ring (whip latch point for swinging; tile itself is background)
 //   L  light statue (a static light source; tile itself is background)
 
@@ -34,7 +36,7 @@ const LEGEND: Record<string, Tile> = {
   "-": Tile.Platform,
 };
 
-export type EnemyKind = "virus" | "plantbox" | "eye";
+export type EnemyKind = "virus" | "plantbox" | "eye" | "bat";
 
 export interface EnemySpawn {
   kind: EnemyKind;
@@ -159,6 +161,10 @@ export function parseLevel(ascii: string): Level {
       if (ch === "e") {
         enemySpawns.push({ kind: "eye", tx: x, ty: y });
         continue; // spawn tile is background
+      }
+      if (ch === "a") {
+        enemySpawns.push({ kind: "bat", tx: x, ty: y });
+        continue; // spawn tile is background (the bat hangs here)
       }
       if (ch === "B") {
         spawnerSpawns.push({ kind: "plantbox", tx: x, ty: y });

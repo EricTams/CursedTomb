@@ -26,6 +26,21 @@ const EYE_H = 12;
 const EYE_SIGHT_PX = 112; // 7 tiles
 const EYE_CHARGE_TICKS = 30;
 
+// Bat: ceiling-roosting flyer (fodder tier — one whip hit kills). Roosts until
+// the player comes near, then swoops in a Zelda 2-style parabolic arc — a
+// downward launch with steady upward acceleration. It dips at most 5 tiles,
+// reverses on walls, and re-roosts when it climbs back into a ceiling. A pure
+// flyer: no gravity, drives its own velocity.
+const BAT_W = 12;
+const BAT_H = 8;
+const BAT_TRIGGER_PX = 64; // player within ~4 tiles horizontally wakes the swoop
+const BAT_DIVE_DEPTH = 5 * TILE; // the arc dips at most 5 tiles before rising
+const BAT_TRIGGER_DY = BAT_DIVE_DEPTH; // ...and only if within the swoop's reach below
+const BAT_DIVE_V0 = 2.4; // launch speed downward; also the capped climb speed
+// Upward accel that turns the arc within BAT_DIVE_DEPTH (so peak climb == V0).
+const BAT_DIVE_ACC = (BAT_DIVE_V0 * BAT_DIVE_V0) / (2 * BAT_DIVE_DEPTH);
+const BAT_FLY_VX = 1.0; // horizontal drift through the swoop
+
 export const STUN_TICKS = 3 * TICK_HZ; // stun window after a whip hit
 export const GETUP_TICKS = 1 * TICK_HZ; // tail of the stun shows the Get Up telegraph
 export const HELD_WAKE_TICKS = 8 * TICK_HZ; // carried this long, it pops free
@@ -52,7 +67,9 @@ export type EnemyState =
   | "stunned"
   | "yanked" // mid-pull: flying to the player's hands (harmless in flight)
   | "held"
-  | "thrown";
+  | "thrown"
+  | "hanging" // Bat: roosting, waiting for the player to come near
+  | "diving"; // Bat: mid-swoop (the parabolic arc)
 
 // The yank: a grabbed enemy is reeled to the hands over a short tween rather
 // than teleporting. Same pull that treasure will use later (design doc §3).
@@ -99,13 +116,31 @@ export class Enemy {
 
   constructor(kind: EnemyKind, spawn: EnemySpawn, private readonly level: Level) {
     this.kind = kind;
-    this.w = kind === "virus" ? VIRUS_W : kind === "eye" ? EYE_W : PLANT_W;
-    this.h = kind === "virus" ? VIRUS_H : kind === "eye" ? EYE_H : PLANT_H;
+    this.w =
+      kind === "virus"
+        ? VIRUS_W
+        : kind === "eye"
+          ? EYE_W
+          : kind === "bat"
+            ? BAT_W
+            : PLANT_W;
+    this.h =
+      kind === "virus"
+        ? VIRUS_H
+        : kind === "eye"
+          ? EYE_H
+          : kind === "bat"
+            ? BAT_H
+            : PLANT_H;
     // Plant Box is a watcher: it stands still until it spots the player.
     if (kind === "plantbox") this.state = "waiting";
+    // Bat hangs from its perch until it spots the player below.
+    if (kind === "bat") this.state = "hanging";
     // Bottom-center the AABB in the spawn tile.
     this.x = spawn.tx * TILE + (TILE - this.w) / 2;
     this.y = (spawn.ty + 1) * TILE - this.h;
+    // A bat roosts centered in its perch tile rather than resting on the floor.
+    if (kind === "bat") this.y = spawn.ty * TILE + (TILE - this.h) / 2;
     this.prevX = this.x;
     this.prevY = this.y;
   }
@@ -118,14 +153,16 @@ export class Enemy {
   get deadly(): boolean {
     if (!this.alive) return false;
     if (this.kind === "eye") return true; // always watching, always lethal
+    if (this.kind === "bat") return true; // a flying menace at perch or mid-dive
     return (
       this.state === "patrol" || this.state === "waiting" || this.state === "rousing"
     );
   }
 
-  // Awake-and-dangerous states: a whip hit stuns any of these.
+  // Awake-and-dangerous states: a whip hit stuns any of these. The Eye and the
+  // Bat are exceptions — a whip hit kills them outright (handled in the game).
   get stunnable(): boolean {
-    return this.kind !== "eye" && this.deadly;
+    return this.kind !== "eye" && this.kind !== "bat" && this.deadly;
   }
 
   // Whip interactions are valid in these states (not while held/thrown).
@@ -251,6 +288,12 @@ export class Enemy {
       return false;
     }
 
+    // The Bat flies under its own power (no gravity): hang, dive, climb back.
+    if (this.kind === "bat") {
+      this.updateBat(player);
+      return false;
+    }
+
     switch (this.state) {
       case "patrol": {
         if (this.grounded) {
@@ -335,6 +378,53 @@ export class Enemy {
         }
         return false;
       }
+      default:
+        return false; // Bat states are handled in updateBat, not here.
+    }
+  }
+
+  // Bat flight (no gravity). Roosts until the player comes near and below, then
+  // swoops in a parabolic arc: launched downward at V0, with a steady upward
+  // acceleration that reverses the dip within 5 tiles and caps the climb at V0.
+  // Walls flip its horizontal direction; a ceiling ends the swoop into a roost.
+  // Lethal on touch throughout.
+  private updateBat(player: Rect): void {
+    const cx = this.x + this.w / 2;
+    const pcx = player.x + player.w / 2;
+
+    if (this.state === "hanging") {
+      this.facing = pcx < cx ? -1 : 1;
+      const dy = player.y - this.y;
+      if (
+        dy > 0 &&
+        dy <= BAT_TRIGGER_DY &&
+        Math.abs(pcx - cx) <= BAT_TRIGGER_PX
+      ) {
+        this.state = "diving";
+        this.vy = BAT_DIVE_V0; // launch downward
+        this.vx = (pcx < cx ? -1 : 1) * BAT_FLY_VX; // swoop toward the player
+        this.facing = this.vx < 0 ? -1 : 1;
+        this.animTick = 0;
+      }
+      return;
+    }
+
+    // Swoop: down velocity, steady upward acceleration -> parabolic arc.
+    this.vy = Math.max(this.vy - BAT_DIVE_ACC, -BAT_DIVE_V0);
+    // moveX/moveY zero the velocity on contact, so capture the climb sign first.
+    const dir = this.vx < 0 ? -1 : 1;
+    if (this.moveX(this.vx)) {
+      this.vx = -dir * BAT_FLY_VX; // bounced off a wall: keep flying the other way
+      this.facing = this.vx < 0 ? -1 : 1;
+    }
+    const rising = this.vy < 0;
+    const blocked = this.moveY(this.vy);
+    if (blocked && rising) {
+      // Climbed back into a ceiling: roost here until the next approach.
+      this.vx = 0;
+      this.vy = 0;
+      this.state = "hanging";
+      this.animTick = 0;
     }
   }
 

@@ -8,20 +8,14 @@ import { ReachMap, computeReachMap } from "./reachability";
 import { Lighting, LightMode } from "./lighting";
 import { Sprite } from "./sprite";
 
-// Remaining placeholder colors: exit, player, and grapple rings don't have
-// approved art yet.
 const COLORS = {
   background: "#000000",
-  exit: "#c9b458",
   player: "#d96a3b",
   playerDying: "#ffffff",
   whip: "#d9b36a",
-  ring: "#c9b458",
   cleared: "#c9b458",
   shatter: "#e8e4d8",
 };
-
-const RING_RADIUS = 4; // placeholder gold ring around the anchor
 
 const CLEAR_TICKS = Math.round(1.5 * TICK_HZ); // flash before auto-restart
 const DEATH_TICKS = Math.round(0.8 * TICK_HZ); // touch kills: blink, then restart
@@ -56,7 +50,7 @@ interface Effect {
   x: number; // center of the burst
   y: number;
   ticks: number;
-  kind: "shatter" | "boom"; // shatter = kill shards, boom = dart explosion
+  kind: "shatter" | "snakeHit" | "boom" | "batHit";
 }
 
 // Eye shot: a horizontal bolt. Kills the player; stops at walls; passes
@@ -147,6 +141,17 @@ export class Game {
 
     if (this.input.lightCurvePressed) {
       this.lightNonlinear = !this.lightNonlinear;
+    }
+
+    // Dev: step through levels with - / = (wraps both ways).
+    if (this.input.prevLevelPressed) {
+      const n = this.levels.length;
+      this.loadLevel((this.levelIndex - 1 + n) % n);
+      return;
+    }
+    if (this.input.nextLevelPressed) {
+      this.loadLevel((this.levelIndex + 1) % this.levels.length);
+      return;
     }
 
     if (this.clearedTimer > 0) {
@@ -317,7 +322,7 @@ export class Game {
       }
       e.lastWhipId = this.player.whipId;
 
-      if (e.kind === "virus" || e.kind === "eye") {
+      if (e.kind === "virus" || e.kind === "eye" || e.kind === "bat") {
         this.killEnemy(e); // one whip hit kills (the Eye's defense is range)
       } else if (e.stunnable) {
         e.stun();
@@ -359,12 +364,19 @@ export class Game {
 
   private killEnemy(e: Enemy): void {
     e.kill();
-    this.effects.push({
-      x: e.x + e.w / 2,
-      y: e.y + e.h / 2,
-      ticks: EFFECT_TICKS,
-      kind: "shatter",
-    });
+    const cx = e.x + e.w / 2;
+    const cy = e.y + e.h / 2;
+    if (e.kind === "virus") {
+      const s = this.art.snakeHit;
+      this.effects.push({ x: cx, y: cy, ticks: s.durationTicks, kind: "snakeHit" });
+      return;
+    }
+    if (e.kind === "bat") {
+      const s = this.art.bat.hit;
+      this.effects.push({ x: cx, y: cy, ticks: s.durationTicks, kind: "batHit" });
+      return;
+    }
+    this.effects.push({ x: cx, y: cy, ticks: EFFECT_TICKS, kind: "shatter" });
   }
 
   private restart(): void {
@@ -407,11 +419,8 @@ export class Game {
         } else if (tile === Tile.Platform) {
           ctx.drawImage(this.art.platform, tx * TILE, ty * TILE);
         } else if (tile === Tile.Exit) {
-          // Exit art isn't approved yet; gold doorway placeholder.
-          ctx.fillStyle = COLORS.exit;
-          ctx.fillRect(tx * TILE + 3, ty * TILE + 2, TILE - 6, TILE - 2);
-          ctx.fillStyle = COLORS.background;
-          ctx.fillRect(tx * TILE + 6, ty * TILE + 6, TILE - 12, TILE - 6);
+          const s = this.art.exit;
+          s.draw(ctx, 0, tx * TILE + TILE / 2, (ty + 1) * TILE, false);
         }
       }
     }
@@ -494,18 +503,11 @@ export class Game {
     }
   }
 
-  // Placeholder gold rings (no approved art yet): a hoop around the anchor
-  // with a dark hollow so it reads as something to thread the whip through.
   private drawGrappleRings(): void {
-    const ctx = this.ctx;
-    ctx.strokeStyle = COLORS.ring;
-    ctx.lineWidth = 2;
+    const s = this.art.hook;
     for (const gp of this.level.grapplePoints) {
-      ctx.beginPath();
-      ctx.arc(gp.x, gp.y, RING_RADIUS, 0, Math.PI * 2);
-      ctx.stroke();
+      s.drawCentered(this.ctx, 0, gp.x, gp.y);
     }
-    ctx.lineWidth = 1;
   }
 
   // While swinging, the whip is the rope: a taut line from hand to anchor.
@@ -524,10 +526,13 @@ export class Game {
   }
 
   private drawLightStatues(): void {
-    const s = this.art.lightStatueOn;
+    const off = this.art.lightStatueOff;
+    const on = this.art.lightStatueOn;
+    const frame = on.frameAt(this.player.animTick);
     for (const ls of this.level.lightStatues) {
-      // Bottom-center anchored at the statue tile's floor line.
-      s.draw(this.ctx, s.frameAt(this.player.animTick), ls.x, (ls.ty + 1) * TILE, false);
+      const anchorY = (ls.ty + 1) * TILE;
+      off.draw(this.ctx, 0, ls.x, anchorY, false);
+      on.draw(this.ctx, frame, ls.x, anchorY, false);
     }
   }
 
@@ -601,6 +606,13 @@ export class Game {
       return;
     }
 
+    // Flyer: Bat. Same wing-flap loop whether perched, diving, or climbing.
+    if (e.kind === "bat") {
+      const s = this.art.bat.fly;
+      s.draw(this.ctx, s.frameAt(e.animTick), anchorX, anchorY, flip);
+      return;
+    }
+
     // Stationary shooter: Dart Cannon. Idle stare, then the Shoot animation
     // (strobing white) as the wind-up telegraph before a dart fires.
     if (e.kind === "eye") {
@@ -664,6 +676,18 @@ export class Game {
       if (fx.kind === "boom") {
         // Dart impact: play the explosion once, centered on the hit point.
         const s = this.art.dartBoom;
+        const age = s.durationTicks - fx.ticks;
+        s.drawCentered(ctx, s.frameAtOnce(age), Math.round(fx.x), Math.round(fx.y));
+        continue;
+      }
+      if (fx.kind === "snakeHit") {
+        const s = this.art.snakeHit;
+        const age = s.durationTicks - fx.ticks;
+        s.drawCentered(ctx, s.frameAtOnce(age), Math.round(fx.x), Math.round(fx.y));
+        continue;
+      }
+      if (fx.kind === "batHit") {
+        const s = this.art.bat.hit;
         const age = s.durationTicks - fx.ticks;
         s.drawCentered(ctx, s.frameAtOnce(age), Math.round(fx.x), Math.round(fx.y));
         continue;

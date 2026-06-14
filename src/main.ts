@@ -8,6 +8,7 @@ import { TouchSource } from "./touch";
 import { OrientationGuard } from "./orientation";
 import { LEVEL_1 } from "./levels/level1";
 import { LEVEL_2 } from "./levels/level2";
+import { LEVEL_3 } from "./levels/level3";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const screen = new Screen(canvas);
@@ -19,8 +20,7 @@ input.addSource(touch);
 const orientation = new OrientationGuard();
 
 const art = await loadArt();
-// TEMP: level 2 first for overlay testing — revert before commit.
-const game = new Game(screen.ctx, art, input, [LEVEL_2, LEVEL_1]);
+const game = new Game(screen.ctx, art, input, [LEVEL_1, LEVEL_2, LEVEL_3]);
 
 // Dev hook: dump the native-res frame buffer to tmp/frame.png on disk (the
 // vite middleware in vite.config.ts does the writing). Lets tooling inspect
