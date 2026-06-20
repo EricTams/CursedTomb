@@ -5,14 +5,18 @@ alwaysApply: true
 
 # Art Asset Discovery
 
-The file-search tools (Glob, sandboxed shell) on this machine have failed to surface
-binary files: a `**/*.png` glob once returned 0 results even though 161 PNGs exist.
-NEVER conclude an asset is missing based on Glob or sandboxed shell output.
+In the **Cursor IDE**, file-search has failed to surface binary files: a `**/*.png`
+glob once returned 0 results even though 161 PNGs exist. The cause is Cursor not
+indexing gitignored paths (the `import_tiles*/` pools and other assets), not the
+files being absent. In Cursor, do NOT conclude an asset is missing from a 0-result
+glob — fall back to the manifest below. (Other tools, e.g. Claude Code, glob these
+files fine; this caveat is Cursor-specific.)
 
 ## Rules
 
-1. To find art, ALWAYS read [art-manifest.md](mdc:art-manifest.md) first. It is the
-   authoritative directory of every art/metadata file in the project.
+1. To find art reliably across tools, consult [art-manifest.md](mdc:art-manifest.md) —
+   the authoritative directory of every art/metadata file in the project (and the
+   only dependable index inside Cursor).
 2. Every asset is a pair: `Name.png` (Aseprite-exported image) + `Name.json`
    (frame/animation metadata). Treat them as a unit - move/copy both together.
 3. If a file listed in the manifest seems missing, verify with the Read tool on the

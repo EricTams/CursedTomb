@@ -89,7 +89,7 @@ export class Sprite {
   }
 
   // Frame index for a play-once animation: runs through, holds the last frame
-  // (used for transitions like the Plant Box settling into its sit pose).
+  // (used for transitions like the Troll settling into its sit pose).
   frameAtOnce(tick: number): number {
     let t = tick;
     for (let i = 0; i < this.frames.length; i++) {
@@ -147,6 +147,33 @@ export class Sprite {
     ctx.scale(-1, 1);
     ctx.drawImage(this.image, f.sx, f.sy, f.sw, f.sh, -dx - f.sw, dy, f.sw, f.sh);
     ctx.restore();
+  }
+
+  // Blit a sub-rectangle of a frame (used for spike hazard strips).
+  blit(
+    frameIndex: number,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+    ctx: OffscreenCanvasRenderingContext2D,
+  ): void {
+    const f = this.frames[frameIndex];
+    ctx.drawImage(
+      this.image,
+      f.sx + sx,
+      f.sy + sy,
+      sw,
+      sh,
+      dx,
+      dy,
+      dw,
+      dh,
+    );
   }
 
   // Draw a frame with its bottom-center at (anchorX, anchorY).

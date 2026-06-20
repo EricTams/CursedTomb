@@ -10,15 +10,20 @@ import { TILE, GRID_W, GRID_H } from "./config";
 //   H  ladder (climbable; its topmost tile is standable like a platform)
 //   -  one-way platform (solid from above only; down+jump drops through)
 //   P  player spawn (exactly one; stored as spawn, tile becomes background)
-//   v  Virus spawn (fodder enemy; stored as spawn, tile becomes background)
-//   b  Plant Box spawn (grabbable enemy; stored as spawn, tile becomes background)
-//   B  Plant Box spawner (statue landmark; respawns its enemy on vacancy, §5)
-//   e  Eye spawn (exit guardian; dies to whip or thrown enemy — but its
+//   s  Snake spawn (fodder enemy; stored as spawn, tile becomes background)
+//   t  Troll spawn (grabbable enemy; stored as spawn, tile becomes background)
+//      Any spawn (s/t/c/a) becomes a respawning statue spawner of its kind
+//      when its cell carries the meta `spawner: true` flag (§5).
+//   c  Cannon spawn (exit guardian; dies to whip or thrown enemy — but its
 //      bolt range far exceeds the whip, so closing in is the risky route)
 //   a  Bat spawn (ceiling-roosting flyer; swoops in a parabolic arc when the
 //      player nears, reverses on walls, re-roosts at a ceiling; one whip kills)
 //   *  grapple ring (whip latch point for swinging; tile itself is background)
 //   L  light statue (a static light source; tile itself is background)
+//   ^  spike marker (passable; hazards derived from adjacent solid surfaces)
+//   $  treasure pot (breakable; the whip shatters it, spilling coins)
+//   @  altar pot (breakable; shatters into a single giant coin — the intro
+//      sequence's trigger; tile itself is background)
 
 export enum Tile {
   Background = 0,
@@ -36,12 +41,40 @@ const LEGEND: Record<string, Tile> = {
   "-": Tile.Platform,
 };
 
-export type EnemyKind = "virus" | "plantbox" | "eye" | "bat";
+export type EnemyKind = "snake" | "troll" | "cannon" | "bat";
+
+// Per-cell metadata side-table. The ASCII grid stays the canonical, readable
+// representation of *what* and *where*; meta carries extra authored attributes
+// (enemy facing, and whether a spawn is a respawning statue spawner) keyed by
+// `${tx},${ty}`. This is what the level editor re-keys when it moves an object,
+// and where further per-cell attributes land without polluting the grid.
+export type FacingTag = "left" | "right";
+
+export interface CellMeta {
+  facing?: FacingTag;
+  // Turns a normal enemy spawn (s/t/c/a) into a statue spawner for that kind:
+  // a landmark that respawns its enemy on vacancy (design doc §5). Any kind can
+  // be a spawner this way; the legacy 'T' char is the troll-only shorthand.
+  spawner?: boolean;
+}
+
+export type LevelMeta = Record<string, CellMeta>;
+
+export interface LevelModule {
+  ascii: string;
+  meta: LevelMeta;
+}
+
+// A level can be authored as a bare ASCII string (the original form — still
+// used by level1-4) or as a { ascii, meta } module (what the editor emits).
+export type LevelInput = string | LevelModule;
 
 export interface EnemySpawn {
   kind: EnemyKind;
   tx: number; // spawn tile coords
   ty: number;
+  facing?: 1 | -1; // authored initial facing (from meta); default is the
+  // Enemy class's own default when omitted.
 }
 
 // Whip latch point for swinging. The anchor is the tile's center in
@@ -62,6 +95,54 @@ export interface LightStatue {
   y: number;
 }
 
+export type SpikeDir = "up" | "down" | "left" | "right";
+
+export interface SpikeSegment {
+  tx: number; // tile where the hazard is drawn (the marker cell)
+  ty: number;
+  dir: SpikeDir;
+}
+
+// Breakable treasure container. A normal pot ("pot") spills a handful of
+// coins; the altar pot ("altar") shatters into a single giant coin. x/y are
+// the tile center in playfield pixels (the pot rests bottom-anchored in its
+// cell). Break state is runtime-only and lives in the Game, not here.
+export type TreasurePotKind = "pot" | "altar";
+
+export interface TreasurePot {
+  kind: TreasurePotKind;
+  tx: number;
+  ty: number;
+  x: number; // tile center px
+  y: number;
+}
+
+function isSpikeSurface(tiles: readonly Tile[], tx: number, ty: number): boolean {
+  if (tx < 0 || tx >= GRID_W || ty < 0 || ty >= GRID_H) return false;
+  const tile = tiles[ty * GRID_W + tx];
+  if (tile === Tile.Solid || tile === Tile.Platform) return true;
+  if (tile === Tile.Ladder && (ty === 0 || tiles[(ty - 1) * GRID_W + tx] !== Tile.Ladder)) {
+    return true;
+  }
+  return false;
+}
+
+export function resolveSpikeSegments(
+  tiles: readonly Tile[],
+  markers: readonly { tx: number; ty: number }[],
+): SpikeSegment[] {
+  const segments: SpikeSegment[] = [];
+
+  for (const { tx, ty } of markers) {
+    if (isSpikeSurface(tiles, tx, ty + 1)) segments.push({ tx, ty, dir: "up" });
+    if (isSpikeSurface(tiles, tx, ty - 1)) segments.push({ tx, ty, dir: "down" });
+    if (isSpikeSurface(tiles, tx - 1, ty)) segments.push({ tx, ty, dir: "right" });
+    if (isSpikeSurface(tiles, tx + 1, ty)) segments.push({ tx, ty, dir: "left" });
+  }
+
+  return segments;
+}
+
 export class Level {
   readonly tiles: Tile[]; // row-major, GRID_W * GRID_H
   readonly spawnX: number; // spawn tile coords
@@ -70,6 +151,8 @@ export class Level {
   readonly spawnerSpawns: readonly EnemySpawn[];
   readonly grapplePoints: readonly GrapplePoint[];
   readonly lightStatues: readonly LightStatue[];
+  readonly spikeSegments: readonly SpikeSegment[];
+  readonly treasurePots: readonly TreasurePot[];
 
   constructor(
     tiles: Tile[],
@@ -79,6 +162,8 @@ export class Level {
     spawnerSpawns: EnemySpawn[] = [],
     grapplePoints: GrapplePoint[] = [],
     lightStatues: LightStatue[] = [],
+    spikeSegments: SpikeSegment[] = [],
+    treasurePots: TreasurePot[] = [],
   ) {
     this.tiles = tiles;
     this.spawnX = spawnX;
@@ -87,6 +172,8 @@ export class Level {
     this.spawnerSpawns = spawnerSpawns;
     this.grapplePoints = grapplePoints;
     this.lightStatues = lightStatues;
+    this.spikeSegments = spikeSegments;
+    this.treasurePots = treasurePots;
   }
 
   tileAt(tx: number, ty: number): Tile {
@@ -118,7 +205,27 @@ export class Level {
   }
 }
 
-export function parseLevel(ascii: string): Level {
+export function parseLevel(input: LevelInput): Level {
+  const { ascii, meta } =
+    typeof input === "string" ? { ascii: input, meta: {} as LevelMeta } : input;
+
+  // Translate authored facing tags to the engine's 1 | -1 convention.
+  const facingAt = (x: number, y: number): 1 | -1 | undefined => {
+    const f = meta[`${x},${y}`]?.facing;
+    return f === "right" ? 1 : f === "left" ? -1 : undefined;
+  };
+
+  // A spawn cell carrying the meta `spawner` flag becomes a statue spawner.
+  const isSpawnerAt = (x: number, y: number): boolean =>
+    meta[`${x},${y}`]?.spawner === true;
+
+  // Route an authored spawn to either the live-spawn list or the spawner list,
+  // depending on its meta flag. Used by every enemy spawn char.
+  const pushSpawn = (kind: EnemyKind, x: number, y: number): void => {
+    const spawn: EnemySpawn = { kind, tx: x, ty: y, facing: facingAt(x, y) };
+    (isSpawnerAt(x, y) ? spawnerSpawns : enemySpawns).push(spawn);
+  };
+
   const rows = ascii
     .split("\n")
     .map((r) => r.trimEnd())
@@ -135,6 +242,8 @@ export function parseLevel(ascii: string): Level {
   const spawnerSpawns: EnemySpawn[] = [];
   const grapplePoints: GrapplePoint[] = [];
   const lightStatues: LightStatue[] = [];
+  const spikeMarkers: { tx: number; ty: number }[] = [];
+  const treasurePots: TreasurePot[] = [];
 
   for (let y = 0; y < GRID_H; y++) {
     if (rows[y].length !== GRID_W) {
@@ -150,25 +259,21 @@ export function parseLevel(ascii: string): Level {
         spawnY = y;
         continue; // spawn tile is background
       }
-      if (ch === "v") {
-        enemySpawns.push({ kind: "virus", tx: x, ty: y });
+      if (ch === "s") {
+        pushSpawn("snake", x, y);
         continue; // spawn tile is background
       }
-      if (ch === "b") {
-        enemySpawns.push({ kind: "plantbox", tx: x, ty: y });
+      if (ch === "t") {
+        pushSpawn("troll", x, y);
         continue; // spawn tile is background
       }
-      if (ch === "e") {
-        enemySpawns.push({ kind: "eye", tx: x, ty: y });
+      if (ch === "c") {
+        pushSpawn("cannon", x, y);
         continue; // spawn tile is background
       }
       if (ch === "a") {
-        enemySpawns.push({ kind: "bat", tx: x, ty: y });
+        pushSpawn("bat", x, y);
         continue; // spawn tile is background (the bat hangs here)
-      }
-      if (ch === "B") {
-        spawnerSpawns.push({ kind: "plantbox", tx: x, ty: y });
-        continue; // spawn tile is background
       }
       if (ch === "*") {
         grapplePoints.push({
@@ -188,6 +293,20 @@ export function parseLevel(ascii: string): Level {
         });
         continue; // statue tile is background
       }
+      if (ch === "^") {
+        spikeMarkers.push({ tx: x, ty: y });
+        continue; // spike marker tile is background
+      }
+      if (ch === "$" || ch === "@") {
+        treasurePots.push({
+          kind: ch === "@" ? "altar" : "pot",
+          tx: x,
+          ty: y,
+          x: x * TILE + TILE / 2,
+          y: y * TILE + TILE / 2,
+        });
+        continue; // pot tile is background (it rests in the cell)
+      }
       const tile = LEGEND[ch];
       if (tile === undefined) {
         throw new Error(`Unknown tile '${ch}' at ${x},${y}`);
@@ -197,6 +316,7 @@ export function parseLevel(ascii: string): Level {
   }
 
   if (spawnX === -1) throw new Error("Level has no spawn 'P'");
+  const spikeSegments = resolveSpikeSegments(tiles, spikeMarkers);
   return new Level(
     tiles,
     spawnX,
@@ -205,5 +325,7 @@ export function parseLevel(ascii: string): Level {
     spawnerSpawns,
     grapplePoints,
     lightStatues,
+    spikeSegments,
+    treasurePots,
   );
 }

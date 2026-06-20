@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cursed Tomb — Level Editor</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #14101c;
+        color: #d8d2e0;
+        font: 13px/1.4 system-ui, sans-serif;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      #editor {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        grid-template-rows: auto 1fr auto;
+        grid-template-areas:
+          "toolbar toolbar"
+          "palette canvas"
+          "palette status";
+        height: 100vh;
+      }
+      #toolbar {
+        grid-area: toolbar;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #1d1729;
+        border-bottom: 1px solid #2e2540;
+        flex-wrap: wrap;
+      }
+      #palette {
+        grid-area: palette;
+        overflow-y: auto;
+        padding: 8px;
+        background: #181322;
+        border-right: 1px solid #2e2540;
+      }
+      #canvas-wrap {
+        grid-area: canvas;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: auto;
+        background: #0d0a14;
+      }
+      #edit-canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        touch-action: none;
+        background: #000;
+        box-shadow: 0 0 0 1px #2e2540;
+      }
+      #status {
+        grid-area: status;
+        padding: 6px 12px;
+        background: #1d1729;
+        border-top: 1px solid #2e2540;
+        min-height: 18px;
+        white-space: pre-wrap;
+      }
+      .tool-btn,
+      .pal-btn {
+        background: #2a2138;
+        color: #d8d2e0;
+        border: 1px solid #3a2f50;
+        border-radius: 4px;
+        padding: 5px 9px;
+        cursor: pointer;
+        font: inherit;
+      }
+      .tool-btn.active,
+      .pal-btn.active {
+        background: #6b4ea8;
+        border-color: #9a7fd0;
+        color: #fff;
+      }
+      .pal-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        margin-bottom: 4px;
+        text-align: left;
+      }
+      .pal-btn canvas {
+        image-rendering: pixelated;
+        background: #0d0a14;
+        border: 1px solid #2e2540;
+      }
+      .pal-group {
+        margin: 4px 0 10px;
+      }
+      .pal-group h4 {
+        margin: 0 0 5px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #8a7fa8;
+      }
+      #toolbar .sep {
+        width: 1px;
+        align-self: stretch;
+        background: #3a2f50;
+        margin: 0 4px;
+      }
+      #toolbar input[type="text"] {
+        background: #0d0a14;
+        color: #d8d2e0;
+        border: 1px solid #3a2f50;
+        border-radius: 4px;
+        padding: 4px 6px;
+        font: inherit;
+        width: 120px;
+      }
+      .err {
+        color: #ff7a7a;
+      }
+      .ok {
+        color: #8fe08f;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="editor">
+      <div id="toolbar">
+        <button class="tool-btn" data-tool="paint">Paint</button>
+        <button class="tool-btn" data-tool="select">Select / Move</button>
+        <button class="tool-btn" data-tool="flip">Flip facing</button>
+        <button class="tool-btn" data-tool="spawner">Toggle spawner</button>
+        <span class="sep"></span>
+        <button id="new-btn" class="tool-btn">New</button>
+        <select id="load-select" class="tool-btn"></select>
+        <span class="sep"></span>
+        <input id="save-name" type="text" placeholder="level name" />
+        <button id="save-btn" class="tool-btn">Save</button>
+      </div>
+      <div id="palette"></div>
+      <div id="canvas-wrap"><canvas id="edit-canvas"></canvas></div>
+      <div id="status"></div>
+    </div>
+    <script type="module" src="/src/editor/main.ts"></script>
+  </body>
+</html>

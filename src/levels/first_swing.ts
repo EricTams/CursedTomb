@@ -4,7 +4,7 @@
 // exit ledge. A missed swing drops to the bottom floor; the ladder on the
 // left climbs back up to the spawn ledge for a retry. No enemies — the ring
 // is the whole lesson. 28x21 grid; legend in src/level.ts.
-export const LEVEL_2 = `
+export const LEVEL_FIRST_SWING = `
 ############################
 #..........................#
 #..........................#

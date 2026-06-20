@@ -7,6 +7,10 @@ dist/
 import_tiles/
 import_tiles_enemy/
 import_tiles_tools/
+import_new/
+
+# Frame-dump + scratch scripts (window.__dumpFrame writes tmp/frame.png)
+tmp/
 
 # Logs
 *.log

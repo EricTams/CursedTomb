@@ -5,26 +5,26 @@ import { Level, EnemyKind, EnemySpawn } from "./level";
 const GRAVITY = 0.18;
 const FALL_MAX = 5;
 
-// Virus: fodder tier — slow floor patroller, one whip hit kills.
-const VIRUS_W = 12;
-const VIRUS_H = 10;
-const VIRUS_SPEED = 0.35;
+// Snake: fodder tier — slow floor patroller, one whip hit kills.
+const SNAKE_W = 12;
+const SNAKE_H = 10;
+const SNAKE_SPEED = 0.35;
 
-// Plant Box: grabbable tier. Hitbox is under a tile tall so a thrown box can
+// Troll: grabbable tier. Hitbox is under a tile tall so a thrown box can
 // pass through one-tile slots even though the art overdraws a little.
-const PLANT_W = 14;
-const PLANT_H = 15;
-const PLANT_SPEED = 0.3;
+const TROLL_W = 14;
+const TROLL_H = 15;
+const TROLL_SPEED = 0.3;
 
-// Eye: stationary exit guardian. One whip hit kills it — but its sight far
+// Cannon: stationary exit guardian. One whip hit kills it — but its sight far
 // out-ranges the whip, so closing in means dodging bolts; a thrown enemy is
 // the safe kill. Low enough that a flat ground-level throw connects.
-const EYE_W = 14;
-const EYE_H = 12;
+const CANNON_W = 14;
+const CANNON_H = 12;
 // It spots intruders far outside whip range (40px), charges with a flash,
 // then fires a horizontal shot — approaching on foot is a losing race.
-const EYE_SIGHT_PX = 112; // 7 tiles
-const EYE_CHARGE_TICKS = 30;
+const CANNON_SIGHT_PX = 112; // 7 tiles
+const CANNON_CHARGE_TICKS = 30;
 
 // Bat: ceiling-roosting flyer (fodder tier — one whip hit kills). Roosts until
 // the player comes near, then swoops in a Zelda 2-style parabolic arc — a
@@ -109,31 +109,31 @@ export class Enemy {
   animTick = 0;
   lastWhipId = 0; // dedups whip hits: one effect per swing
   hitFlash = 0; // ticks of white flash right after a whip connects
-  eyeCharge = 0; // Eye only: charge progress toward the next shot
-  fired = false; // Eye only: true on the tick a shot leaves the eye
-  shotDir: 1 | -1 = -1; // Eye only: which way the pending shot flies
+  cannonCharge = 0; // Cannon only: charge progress toward the next shot
+  fired = false; // Cannon only: true on the tick a shot leaves the cannon
+  shotDir: 1 | -1 = -1; // Cannon only: which way the pending shot flies
   private grounded = false;
 
   constructor(kind: EnemyKind, spawn: EnemySpawn, private readonly level: Level) {
     this.kind = kind;
     this.w =
-      kind === "virus"
-        ? VIRUS_W
-        : kind === "eye"
-          ? EYE_W
+      kind === "snake"
+        ? SNAKE_W
+        : kind === "cannon"
+          ? CANNON_W
           : kind === "bat"
             ? BAT_W
-            : PLANT_W;
+            : TROLL_W;
     this.h =
-      kind === "virus"
-        ? VIRUS_H
-        : kind === "eye"
-          ? EYE_H
+      kind === "snake"
+        ? SNAKE_H
+        : kind === "cannon"
+          ? CANNON_H
           : kind === "bat"
             ? BAT_H
-            : PLANT_H;
-    // Plant Box is a watcher: it stands still until it spots the player.
-    if (kind === "plantbox") this.state = "waiting";
+            : TROLL_H;
+    // Troll is a watcher: it stands still until it spots the player.
+    if (kind === "troll") this.state = "waiting";
     // Bat hangs from its perch until it spots the player below.
     if (kind === "bat") this.state = "hanging";
     // Bottom-center the AABB in the spawn tile.
@@ -146,23 +146,23 @@ export class Enemy {
   }
 
   get speed(): number {
-    return this.kind === "virus" ? VIRUS_SPEED : PLANT_SPEED;
+    return this.kind === "snake" ? SNAKE_SPEED : TROLL_SPEED;
   }
 
   // Active = will kill the player on touch.
   get deadly(): boolean {
     if (!this.alive) return false;
-    if (this.kind === "eye") return true; // always watching, always lethal
+    if (this.kind === "cannon") return true; // always watching, always lethal
     if (this.kind === "bat") return true; // a flying menace at perch or mid-dive
     return (
       this.state === "patrol" || this.state === "waiting" || this.state === "rousing"
     );
   }
 
-  // Awake-and-dangerous states: a whip hit stuns any of these. The Eye and the
+  // Awake-and-dangerous states: a whip hit stuns any of these. The Cannon and the
   // Bat are exceptions — a whip hit kills them outright (handled in the game).
   get stunnable(): boolean {
-    return this.kind !== "eye" && this.kind !== "bat" && this.deadly;
+    return this.kind !== "cannon" && this.kind !== "bat" && this.deadly;
   }
 
   // Whip interactions are valid in these states (not while held/thrown).
@@ -270,20 +270,20 @@ export class Enemy {
     this.animTick++;
     if (this.hitFlash > 0) this.hitFlash--;
 
-    // The Eye never moves: no gravity, no patrol — a fixture, not a walker.
+    // The Cannon never moves: no gravity, no patrol — a fixture, not a walker.
     // It watches: player in sight charges the shot; losing sight winds the
     // charge back down (faster than it builds, but not instantly).
-    if (this.kind === "eye") {
+    if (this.kind === "cannon") {
       this.fired = false;
-      if (this.eyeSees(player)) {
+      if (this.cannonSees(player)) {
         this.shotDir =
           player.x + player.w / 2 < this.x + this.w / 2 ? -1 : 1;
-        if (++this.eyeCharge >= EYE_CHARGE_TICKS) {
-          this.eyeCharge = 0;
+        if (++this.cannonCharge >= CANNON_CHARGE_TICKS) {
+          this.cannonCharge = 0;
           this.fired = true;
         }
-      } else if (this.eyeCharge > 0) {
-        this.eyeCharge = Math.max(0, this.eyeCharge - 2);
+      } else if (this.cannonCharge > 0) {
+        this.cannonCharge = Math.max(0, this.cannonCharge - 2);
       }
       return false;
     }
@@ -299,7 +299,7 @@ export class Enemy {
         if (this.grounded) {
           if (this.wallAhead() || !this.groundAhead()) {
             this.facing = this.facing === 1 ? -1 : 1;
-            if (this.kind === "plantbox") {
+            if (this.kind === "troll") {
               // End of the path: turn around and wait for the next sighting.
               this.state = "waiting";
               this.vx = 0;
@@ -349,7 +349,7 @@ export class Enemy {
         this.moveX(this.vx);
         this.moveY(this.vy);
         if (--this.stunTicks <= 0) {
-          this.state = this.kind === "plantbox" ? "waiting" : "patrol";
+          this.state = this.kind === "troll" ? "waiting" : "patrol";
           this.animTick = 0;
         }
         return false;
@@ -433,17 +433,17 @@ export class Enemy {
   }
 
   get charging(): boolean {
-    return this.eyeCharge > 0;
+    return this.cannonCharge > 0;
   }
 
-  // Eye sight: either direction, same height band, within range, with a
-  // clear line of solid-free tiles along the eye's center row.
-  private eyeSees(p: Rect): boolean {
+  // Cannon sight: either direction, same height band, within range, with a
+  // clear line of solid-free tiles along the cannon's center row.
+  private cannonSees(p: Rect): boolean {
     if (p.y >= this.y + this.h + SIGHT_SLACK * 2) return false;
     if (p.y + p.h <= this.y - SIGHT_SLACK * 2) return false;
     const cx = this.x + this.w / 2;
     const pcx = p.x + p.w / 2;
-    if (Math.abs(pcx - cx) > EYE_SIGHT_PX) return false;
+    if (Math.abs(pcx - cx) > CANNON_SIGHT_PX) return false;
     const ty = Math.floor((this.y + this.h / 2) / TILE);
     const x0 = Math.floor(cx / TILE);
     const x1 = Math.floor(pcx / TILE);
@@ -572,7 +572,11 @@ export class Enemy {
 }
 
 export function spawnEnemies(level: Level): Enemy[] {
-  return level.enemySpawns.map((s) => new Enemy(s.kind, s, level));
+  return level.enemySpawns.map((s) => {
+    const e = new Enemy(s.kind, s, level);
+    if (s.facing) e.facing = s.facing; // authored initial facing, if any
+    return e;
+  });
 }
 
 // Spawner (design doc §5): a statue landmark with a one-alive cap. Dormant
@@ -627,6 +631,7 @@ export class Spawner {
     if (blocked) return null; // hold at the brink until the spot is clear
     this.flashTicks = 0;
     this.enemy = new Enemy(this.spawn.kind, this.spawn, this.level);
+    if (this.spawn.facing) this.enemy.facing = this.spawn.facing; // authored facing
     return this.enemy;
   }
 }

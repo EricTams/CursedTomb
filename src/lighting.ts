@@ -111,19 +111,24 @@ export class Lighting {
 
   // Run the darkening operator over the whole frame buffer in place.
   // nonlinear=true uses the plateau response (snap to normal/Dark/Very Dark).
+  // lightFloor in [0,1) compresses the dynamic range: a light level l is
+  // remapped to lightFloor + (1 - lightFloor) * l before the operator, so the
+  // darkest area renders "at least lightFloor lit" and the live lighting is
+  // crammed into the top (1 - lightFloor). 0 = full authored range.
   apply(
     ctx: OffscreenCanvasRenderingContext2D,
     mode: LightMode,
     nonlinear: boolean,
+    lightFloor = 0,
   ): void {
     const gainLut = nonlinear ? this.gainLutNL : this.gainLut;
     const floorLut = nonlinear ? this.floorLutNL : this.floorLut;
     const img = ctx.getImageData(0, 0, VIEW_W, VIEW_H);
     const d = img.data;
     if (mode === "tile") {
-      this.applyTile(d, gainLut, floorLut);
+      this.applyTile(d, gainLut, floorLut, lightFloor);
     } else {
-      this.applyPixel(d, gainLut, floorLut);
+      this.applyPixel(d, gainLut, floorLut, lightFloor);
     }
     ctx.putImageData(img, 0, 0);
   }
@@ -132,10 +137,13 @@ export class Lighting {
     d: Uint8ClampedArray,
     gainLut: Float32Array,
     floorLut: Float32Array,
+    lightFloor: number,
   ): void {
+    const range = 1 - lightFloor;
     const n = GRID_W * GRID_H;
     for (let t = 0; t < n; t++) {
-      const idx = (this.light[t] * LUT_N) | 0;
+      const l = lightFloor + range * this.light[t];
+      const idx = (l * LUT_N) | 0;
       this.gain[t] = gainLut[idx];
       this.floor[t] = floorLut[idx];
     }
@@ -157,7 +165,9 @@ export class Lighting {
     d: Uint8ClampedArray,
     gainLut: Float32Array,
     floorLut: Float32Array,
+    lightFloor: number,
   ): void {
+    const range = 1 - lightFloor;
     const sources = this.sources;
     for (let y = 0; y < VIEW_H; y++) {
       let i = y * VIEW_W * 4;
@@ -171,7 +181,7 @@ export class Lighting {
           const c = contribution(Math.sqrt(dx * dx + dy * dy), src.fullR, src.fadeR);
           if (c > l) l = c;
         }
-        const idx = (l * LUT_N) | 0;
+        const idx = ((lightFloor + range * l) * LUT_N) | 0;
         const g = gainLut[idx];
         const f = floorLut[idx];
         d[i] = clamp(g * d[i] - f);

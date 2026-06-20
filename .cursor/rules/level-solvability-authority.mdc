@@ -11,24 +11,26 @@ the user grants it explicitly, in this task.
 
 Revising a level for solvability is a known degenerate condition: it sends the
 agent into a death spiral of reachability tweaks. Treat it as off-limits until
-told otherwise.
+told otherwise. The only honest check is playing the level — see
+[level-design-workflow.mdc](mdc:.cursor/rules/level-design-workflow.mdc).
 
 ## Rules
 
 1. You MAY create or edit a level's layout when asked.
-2. After authoring, you MAY run the reachability sim ONCE to report the result
-   as information (reachable / not reachable, where it fails).
+2. After authoring, you MAY play it ONCE to report the result as information
+   (reachable / not reachable, where it seems to fail).
 3. You MUST NOT change the level to "fix" solvability, reachability, jump arcs,
    ring placement, or difficulty unless the user has explicitly told you, in
    this task, that you are allowed to revise it.
-4. If the sim shows a level is unsolvable, STOP and report it. Do not start
-   tweaking. Ask whether you should revise.
+4. If a level looks unsolvable, STOP and report it. Do not start tweaking.
+   Ask whether you should revise.
 
 ## Concrete
 
-- Allowed (unprompted): "Built the level. Sim says the exit is unreachable on
-  foot and reachable via the ring. Want me to adjust anything?" -> then STOP.
-- Not allowed (unprompted): moving the ring/ledges/gap and re-running the sim
-  in a loop to make the exit reachable.
+- Allowed (unprompted): "Built the level. Playing it, the exit looks
+  unreachable on foot but reachable via the ring. Want me to adjust anything?"
+  -> then STOP.
+- Not allowed (unprompted): moving the ring/ledges/gap and replaying in a loop
+  to make the exit reachable.
 
 When in doubt about whether you may revise, ask before editing.

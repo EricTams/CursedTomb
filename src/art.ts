@@ -74,6 +74,10 @@ import explosiveOnionExplodeJson from "../assets/art/Explosive Bounce Onion-Expl
 
 import coinUrl from "../assets/art/Coin-Coin.png";
 import coinJson from "../assets/art/Coin-Coin.json";
+
+// Audio: the curse speech that plays during the intro cutscene. Loaded as a
+// URL (vite/client types .wav) and wrapped in an HTMLAudioElement.
+import introSpeechUrl from "../assets/art/Intro_Speech.wav";
 import smallPotUrl from "../assets/art/Small Pot-Pot.png";
 import smallPotJson from "../assets/art/Small Pot-Pot.json";
 import tallPotUrl from "../assets/art/Tall Pot-Pot.png";
@@ -179,6 +183,7 @@ export interface Art {
   player: PlayerArt;
   lightStatueOff: Sprite;
   lightStatueOn: Sprite;
+  introSpeech: HTMLAudioElement; // curse VO for the intro cutscene
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -333,5 +338,12 @@ export async function loadArt(): Promise<Art> {
     },
     lightStatueOff,
     lightStatueOn,
+    introSpeech: makeAudio(introSpeechUrl),
   };
+}
+
+function makeAudio(url: string): HTMLAudioElement {
+  const a = new Audio(url);
+  a.preload = "auto";
+  return a;
 }

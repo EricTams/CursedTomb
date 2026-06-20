@@ -44,9 +44,6 @@ export class KeyboardSource implements InputSource {
       case "KeyR":
         this.actions.restart = down;
         break;
-      case "KeyM":
-        this.actions.map = down;
-        break;
       case "KeyL":
         this.actions.lightMode = down;
         break;

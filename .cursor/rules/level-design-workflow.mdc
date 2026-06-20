@@ -1,29 +1,29 @@
 ---
-description: Verify level navigability with tools, never by reasoning alone; avoid analysis death spirals
+description: Verify level navigability by playtesting, never by reasoning alone; avoid analysis death spirals
 alwaysApply: true
 ---
 
-# Level Design: Simulate, Don't Speculate
+# Level Design: Playtest, Don't Speculate
 
 Lesson learned the expensive way (level 2 ring intro, Jun 2026): an agent spent
 ~35 minutes reasoning about jump arcs, whip angles, and ledge positions for a
 simple 28x21 level — pixel math in its head, repeatedly revised, no artifact
-produced — when the reachability simulator answers the same questions in
+produced — when actually playing the level answers the same questions in
 seconds, correctly, against the real physics.
 
 ## Rules
 
-1. NEVER hand-reason about whether a player can reach/jump/swing somewhere.
-   Run the reachability sim instead: press M in-game (dev overlay; green =
-   on foot, gold = whip-only, red X = exit unreachable), or call
-   `computeReachMap(level)` from `src/reachability.ts` directly.
-2. To inspect results, dump the native-res frame to disk and look at it:
-   `window.__dumpFrame()` in the browser writes `tmp/frame.png`
-   (vite middleware; dev server must be running). Reading an image beats
-   squinting at scaled screenshots or imagining the layout.
-3. When authoring or editing a level: write the ASCII, load it, run the sim,
-   look at the overlay, adjust. Tile-coordinate arithmetic in prose is a
-   smell that you should be running the tool instead.
+1. NEVER hand-reason about whether a player can reach/jump/swing somewhere, and
+   don't try to compute or model it offline either — the whip and swing make
+   "where can the player get to" too tangled to model honestly. Load the level
+   and play it.
+2. To inspect a frame precisely, dump the native-res buffer to disk and look at
+   it: `window.__dumpFrame()` in the browser writes `tmp/frame.png` (vite
+   middleware; dev server must be running). Reading an image beats squinting at
+   scaled screenshots or imagining the layout.
+3. When authoring or editing a level: write the ASCII, load it, play it, look,
+   adjust. Tile-coordinate arithmetic in prose is a smell that you should be
+   running the game instead.
 
 ## Death-spiral guard
 
@@ -33,7 +33,7 @@ rules:
 
 - Before any tool call, say in a sentence what you're doing and why.
 - If you notice you are re-deriving the same positions/numbers a second
-  time, stop and build or run the tool that answers the question.
+  time, stop and load the level / dump a frame to answer the question.
 - Surface findings to the user as they happen; never accumulate 10+ minutes
   of work with nothing user-visible to show for it.
 - Mid-task user messages take priority over finishing the current chain of

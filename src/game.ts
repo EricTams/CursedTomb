@@ -1,31 +1,73 @@
 import { TILE, GRID_W, GRID_H, VIEW_W, VIEW_H, TICK_HZ } from "./config";
-import { Level, Tile, parseLevel } from "./level";
+import {
+  Level,
+  Tile,
+  parseLevel,
+  type LevelInput,
+  type EnemyKind,
+  type TreasurePotKind,
+} from "./level";
 import { Input } from "./input";
 import { Art } from "./art";
 import { Player, PLAYER_W, PLAYER_H } from "./player";
 import { Enemy, spawnEnemies, Spawner, buildSpawners } from "./enemy";
-import { ReachMap, computeReachMap } from "./reachability";
 import { Lighting, LightMode } from "./lighting";
+import { Settings } from "./settings";
 import { Sprite } from "./sprite";
+import { drawSpikeSegment, spikeHitboxes, SPIKE_SCALE, SPIKE_CROSS_ASPECT } from "./spikes";
+import { drawText } from "./text";
 
 const COLORS = {
   background: "#000000",
   player: "#d96a3b",
   playerDying: "#ffffff",
   whip: "#d9b36a",
-  cleared: "#c9b458",
   shatter: "#e8e4d8",
 };
 
-const CLEAR_TICKS = Math.round(1.5 * TICK_HZ); // flash before auto-restart
+const IRIS_TICKS = Math.round(1.0 * TICK_HZ); // iris open/close transition (1s)
+const IRIS_MIN_RADIUS = 14; // tight circle around the player at the closed end
 const DEATH_TICKS = Math.round(0.8 * TICK_HZ); // touch kills: blink, then restart
 const HELD_BLINK_TICKS = 1 * TICK_HZ; // held box flashes this long before waking
 const STOMP_BOUNCE = -2.5;
 const EFFECT_TICKS = 14;
 
+// Treasure: a whipped pot spills coins; the altar pot bursts into one giant
+// coin (the intro trigger). Coin motion is deterministic — no Math.random in
+// the sim (seeded levels depend on it) — so the spread is a fixed fan.
+const POT_COINS = 4; // coins spilled by a normal pot
+// Collision/rest boxes match the drawn sprite so coins rest ON the floor, not
+// sunk into it. The coin art fills its 16px frame; small coins draw at 0.5x
+// (8px) and the giant at 2x (32px) — see COIN_SCALE / drawPickups.
+const COIN_W = 8;
+const COIN_H = 8;
+const GIANT_W = 32;
+const GIANT_H = 32;
+const COIN_SCALE = 0.5; // small coins render at half the sprite's native size
+const COIN_GRAVITY = 0.25; // px/tick^2
+const COIN_FALL_MAX = 4;
+const COIN_POP_SPEED = 1.6; // initial burst speed
+const COIN_BOUNCE = 0.4; // wall rebound retained fraction
+const COIN_FRICTION = 0.8; // ground horizontal damping per landing
+const GIANT_POP_VY = -1.6; // the giant coin hops up out of the altar
+
+// Intro curse cutscene (Act 2): the screen convulses, the words splat in, then
+// a tutorial dialog waits for input before the descent. All tick-scheduled.
+const CURSE_STRIKE_TICKS = 230; // shaking + flicker phase (~3.8s, through CURSED)
+const DIALOG_AT = 300; // tutorial dialog appears (~1.5s after CURSED lands)
+// Word splats land at 1.5s / 2.5s / 3.5s (60Hz).
+const WORD_YOU_AT = 90;
+const WORD_ARE_AT = 150;
+const WORD_CURSED_AT = 210;
+const CURSE_GRAVITY = 0.22; // puppet bounce gravity while the player is tossed
+const SHAKE_X = 6; // peak screenshake amplitude (px)
+const SHAKE_Y = 5;
+const CURSE_PURPLE = "#c9a0ff";
+const CURSE_RED = "#e0506a";
+
 // Effective whip lash thickness: enemy hitboxes are inflated by this much in
 // the hit test so grazing the target still connects (the drawn lash is 1px,
-// which felt stingy — especially against the 10px-tall Virus).
+// which felt stingy — especially against the 10px-tall Snake).
 const WHIP_HIT_PAD = 4;
 
 // Spawner statue brightnesses: dark monument normally, lit pulse while
@@ -53,8 +95,8 @@ interface Effect {
   kind: "shatter" | "snakeHit" | "boom" | "batHit";
 }
 
-// Eye shot: a horizontal bolt. Kills the player; stops at walls; passes
-// through enemies (the Eye doesn't fear its own kin).
+// Cannon shot: a horizontal bolt. Kills the player; stops at walls; passes
+// through enemies (the Cannon doesn't fear its own kin).
 interface Shot {
   x: number; // center
   y: number;
@@ -67,6 +109,32 @@ const SHOT_SPEED = 2;
 const SHOT_W = 6;
 const SHOT_H = 4;
 
+// A pot from the level, plus its runtime break state (the Level itself stays
+// immutable so a restart re-arms every pot).
+interface PotState {
+  kind: TreasurePotKind;
+  tx: number;
+  ty: number;
+  x: number; // tile center px
+  y: number;
+  broken: boolean;
+}
+
+// A loose coin spilled from a pot. x/y are the CENTER (coins draw centered and
+// collide as a small box around it). prevX/prevY interpolate the render.
+interface Pickup {
+  x: number;
+  y: number;
+  prevX: number;
+  prevY: number;
+  vx: number;
+  vy: number;
+  w: number;
+  h: number;
+  giant: boolean; // the altar's single big coin (ends the intro's Act 1)
+  anim: number;
+}
+
 export class Game {
   private level!: Level;
   private player!: Player;
@@ -76,15 +144,22 @@ export class Game {
   private held: Enemy | null = null;
   private effects: Effect[] = [];
   private shots: Shot[] = [];
-  private clearedTimer = 0; // >0 while showing the CLEARED flash
+  private pots: PotState[] = []; // breakable treasure containers
+  private pickups: Pickup[] = []; // loose coins in flight / on the floor
+  private irisInTicks = 0; // >0 while the opening iris reveals a new level
+  private irisOutTicks = 0; // >0 while the closing iris wipes out to the exit
   private deathTimer = 0; // >0 while showing the death blink
-  // Dev reachability overlay (M to toggle, sticky across levels). The map is
-  // computed lazily per level and cached until the level changes.
-  private showReach = false;
-  private reachMap: ReachMap | null = null;
-  // Statue images for spawner landmarks (grayscale takes of the monster).
-  private readonly statueDim: OffscreenCanvas;
-  private readonly statueLit: OffscreenCanvas;
+  private introMode = false; // true while the intro level runs its scripted flow
+  private cutsceneTick = -1; // >=0 while the curse cutscene plays (counts up)
+  private shakeX = 0; // current screenshake offset (px), applied in render
+  private shakeY = 0;
+  private cutsceneFloorY = 0; // player's resting y captured at the curse strike
+  private cutsceneBaseX = 0; // player's x captured at the curse strike
+  private readonly isTouch =
+    typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+  // Statue images for spawner landmarks (grayscale takes of the monster),
+  // one dim/lit pair per enemy kind so each spawner shows its own monument.
+  private readonly statues: Record<EnemyKind, { dim: OffscreenCanvas; lit: OffscreenCanvas }>;
   // Darkening pass (reproduces the authored Dark/Very Dark art). Dev toggle
   // (L) flips between per-tile (art-faithful, blocky) and per-pixel (smooth).
   private readonly lighting = new Lighting();
@@ -96,12 +171,36 @@ export class Game {
     private readonly ctx: OffscreenCanvasRenderingContext2D,
     private readonly art: Art,
     private readonly input: Input,
-    private readonly levels: readonly string[],
+    private readonly settings: Settings,
+    private readonly levels: readonly LevelInput[],
   ) {
-    // The statue is the monster's dormant pose, set in stone.
-    this.statueDim = art.troll.statue(art.troll.lastFrame, STATUE_DIM);
-    this.statueLit = art.troll.statue(art.troll.lastFrame, STATUE_LIT);
+    // The statue is the monster's dormant pose, set in stone. Each kind derives
+    // its monument from a representative frame of its own sprite.
+    const statueOf = (s: Sprite) => ({
+      dim: s.statue(s.lastFrame, STATUE_DIM),
+      lit: s.statue(s.lastFrame, STATUE_LIT),
+    });
+    this.statues = {
+      snake: statueOf(art.snake),
+      troll: statueOf(art.troll),
+      cannon: statueOf(art.cannonIdle),
+      bat: statueOf(art.bat.fly),
+    };
     this.loadLevel(0);
+  }
+
+  // Reload the current level to its clean start state. The intro recorder and
+  // replay both call this so a recorded run and its playback begin from an
+  // identical sim state (required for deterministic replay).
+  reload(): void {
+    this.loadLevel(this.levelIndex);
+  }
+
+  // Arm the intro's scripted flow on the current (intro) level: grabbing the
+  // altar's giant coin will spring the curse handoff. Call right after reload()
+  // so the recorded tape and the flow start from the same clean tick.
+  beginIntro(): void {
+    this.introMode = true;
   }
 
   // (Re)build the whole play state from a level's ASCII. Used for boot,
@@ -115,9 +214,15 @@ export class Game {
     this.held = null;
     this.effects = [];
     this.shots = [];
-    this.clearedTimer = 0;
+    this.pots = this.level.treasurePots.map((p) => ({ ...p, broken: false }));
+    this.pickups = [];
+    this.irisInTicks = IRIS_TICKS; // play the opening iris when a level loads
+    this.irisOutTicks = 0;
     this.deathTimer = 0;
-    this.reachMap = null;
+    this.introMode = false; // re-armed explicitly via beginIntro() if needed
+    this.cutsceneTick = -1;
+    this.shakeX = 0;
+    this.shakeY = 0;
   }
 
   update(): void {
@@ -126,13 +231,6 @@ export class Game {
     if (this.input.restartPressed) {
       this.restart();
       return;
-    }
-
-    if (this.input.mapPressed) {
-      this.showReach = !this.showReach;
-      if (this.showReach && !this.reachMap) {
-        this.reachMap = computeReachMap(this.level);
-      }
     }
 
     if (this.input.lightModePressed) {
@@ -154,16 +252,25 @@ export class Game {
       return;
     }
 
-    if (this.clearedTimer > 0) {
-      // Advance to the next level (looping for now — no ending yet).
-      if (--this.clearedTimer === 0) {
+    if (this.irisInTicks > 0) {
+      this.irisInTicks--;
+      return; // freeze gameplay while the level opens
+    }
+    if (this.irisOutTicks > 0) {
+      // Advance to the next level (looping for now — no ending yet) once the
+      // iris has closed fully.
+      if (--this.irisOutTicks === 0) {
         this.loadLevel((this.levelIndex + 1) % this.levels.length);
       }
-      return; // freeze gameplay during the flash
+      return; // freeze gameplay while the iris closes
     }
     if (this.deathTimer > 0) {
       if (--this.deathTimer === 0) this.restart();
       return;
+    }
+    if (this.cutsceneTick >= 0) {
+      this.updateCutscene();
+      return; // the curse cutscene owns the sim while it plays
     }
 
     this.player.update(this.input);
@@ -186,13 +293,16 @@ export class Game {
     this.updateShots();
     this.applyWhipHits();
     this.applyStomps();
+    this.updatePickups();
+    this.collectPickups();
     this.checkPlayerDeath();
+    this.checkSpikeDeath();
 
     for (const fx of this.effects) fx.ticks--;
     this.effects = this.effects.filter((fx) => fx.ticks > 0);
 
     if (this.deathTimer === 0 && this.touchingExit()) {
-      this.clearedTimer = CLEAR_TICKS;
+      this.irisOutTicks = IRIS_TICKS;
     }
   }
 
@@ -238,7 +348,7 @@ export class Game {
         if (e.alive && impact) this.killEnemy(e); // shattered on wall/floor
       }
 
-      if (e.kind === "eye" && e.fired) {
+      if (e.kind === "cannon" && e.fired) {
         // The bolt leaves from the pupil, just clear of the hitbox.
         this.shots.push({
           x: e.shotDir === -1 ? e.x - SHOT_W / 2 : e.x + e.w + SHOT_W / 2,
@@ -322,8 +432,8 @@ export class Game {
       }
       e.lastWhipId = this.player.whipId;
 
-      if (e.kind === "virus" || e.kind === "eye" || e.kind === "bat") {
-        this.killEnemy(e); // one whip hit kills (the Eye's defense is range)
+      if (e.kind === "snake" || e.kind === "cannon" || e.kind === "bat") {
+        this.killEnemy(e); // one whip hit kills (the Cannon's defense is range)
       } else if (e.stunnable) {
         e.stun();
       } else if (e.state === "stunned" && !this.held) {
@@ -332,6 +442,204 @@ export class Game {
         this.player.holding = true;
       }
     }
+
+    // The lash also shatters treasure pots it crosses.
+    for (const pot of this.pots) {
+      if (pot.broken) continue;
+      const b = potBox(pot);
+      if (
+        segmentHitsRect(seg, b.x, b.y, b.w, b.h) ||
+        (segPrev && segmentHitsRect(segPrev, b.x, b.y, b.w, b.h))
+      ) {
+        this.breakPot(pot);
+      }
+    }
+  }
+
+  // Shatter a pot: a normal one fans out a handful of coins; the altar pot
+  // bursts into a single giant coin. Deterministic spread (no Math.random).
+  private breakPot(pot: PotState): void {
+    pot.broken = true;
+    this.effects.push({ x: pot.x, y: pot.y, ticks: EFFECT_TICKS, kind: "shatter" });
+    if (pot.kind === "altar") {
+      this.pickups.push({
+        x: pot.x,
+        y: pot.y - 2,
+        prevX: pot.x,
+        prevY: pot.y - 2,
+        vx: 0,
+        vy: GIANT_POP_VY,
+        w: GIANT_W,
+        h: GIANT_H,
+        giant: true,
+        anim: 0,
+      });
+      return;
+    }
+    for (let i = 0; i < POT_COINS; i++) {
+      // Fan across the top half (0..PI): cos -> sideways, sin -> upward.
+      const a = (Math.PI * (i + 0.5)) / POT_COINS;
+      this.pickups.push({
+        x: pot.x,
+        y: pot.y,
+        prevX: pot.x,
+        prevY: pot.y,
+        vx: Math.cos(a) * COIN_POP_SPEED,
+        vy: -Math.sin(a) * COIN_POP_SPEED - 0.6,
+        w: COIN_W,
+        h: COIN_H,
+        giant: false,
+        anim: i, // stagger the shimmer so they don't pulse in lockstep
+      });
+    }
+  }
+
+  // Loose-coin physics: gravity, walls rebound, floor catches (solids and the
+  // tops of one-way platforms). Coins use center coords.
+  private updatePickups(): void {
+    for (const p of this.pickups) {
+      p.prevX = p.x;
+      p.prevY = p.y;
+      p.anim++;
+      p.vy = Math.min(p.vy + COIN_GRAVITY, COIN_FALL_MAX);
+      const half = p.w / 2;
+
+      p.x += p.vx;
+      const row = Math.floor(p.y / TILE);
+      if (p.vx > 0) {
+        const tx = Math.floor((p.x + half) / TILE);
+        if (this.level.isSolid(tx, row)) {
+          p.x = tx * TILE - half;
+          p.vx = -p.vx * COIN_BOUNCE;
+        }
+      } else if (p.vx < 0) {
+        const tx = Math.floor((p.x - half) / TILE);
+        if (this.level.isSolid(tx, row)) {
+          p.x = (tx + 1) * TILE + half;
+          p.vx = -p.vx * COIN_BOUNCE;
+        }
+      }
+
+      p.y += p.vy;
+      if (p.vy > 0) {
+        const ty = Math.floor((p.y + half) / TILE);
+        const col = Math.floor(p.x / TILE);
+        const onPlatform =
+          this.level.isPlatform(col, ty) && p.prevY + half <= ty * TILE;
+        if (this.level.isSolid(col, ty) || onPlatform) {
+          p.y = ty * TILE - half;
+          p.vy = 0;
+          p.vx *= COIN_FRICTION;
+        }
+      }
+    }
+  }
+
+  // Player overlap collects coins. The giant coin additionally ends the
+  // intro's Act 1 (see onGiantCoinGrabbed).
+  private collectPickups(): void {
+    if (this.deathTimer > 0) return;
+    const px = this.player.x;
+    const py = this.player.y;
+    let gotGiant = false;
+    this.pickups = this.pickups.filter((p) => {
+      const l = p.x - p.w / 2;
+      const t = p.y - p.h / 2;
+      const hit =
+        px < l + p.w &&
+        px + PLAYER_W > l &&
+        py < t + p.h &&
+        py + PLAYER_H > t;
+      if (!hit) return true;
+      // The giant coin's pickup is the curse trigger — no sparkle pop; the
+      // cutscene owns that moment. Normal coins sparkle.
+      if (p.giant) gotGiant = true;
+      else this.effects.push({ x: p.x, y: p.y, ticks: EFFECT_TICKS, kind: "shatter" });
+      return false;
+    });
+    if (gotGiant) this.onGiantCoinGrabbed();
+  }
+
+  // Hook for the intro: grabbing the altar's giant coin springs the curse.
+  // Only fires during the scripted intro flow (not while free-playing the
+  // level or recording a tape). Hands off to the Act-2 curse cutscene.
+  private onGiantCoinGrabbed(): void {
+    if (!this.introMode) return;
+    this.introMode = false;
+    this.cutsceneTick = 0;
+    this.cutsceneFloorY = this.player.y; // bounce on the spot the coin was grabbed
+    this.cutsceneBaseX = this.player.x;
+    this.player.holding = false;
+    void this.art.introSpeech.play().catch(() => {}); // user already gestured
+  }
+
+  // Curse cutscene step. The strike phase shakes the screen, tosses the player
+  // and splats the words in; then a tutorial dialog waits for any input before
+  // the iris wipes out to Level 1.
+  private updateCutscene(): void {
+    const t = this.cutsceneTick;
+
+    if (t <= CURSE_STRIKE_TICKS) {
+      const env = 1 - t / CURSE_STRIKE_TICKS; // shake decays across the strike
+      this.shakeX = Math.round(Math.sin(t * 1.7) * SHAKE_X * env);
+      this.shakeY = Math.round(Math.cos(t * 2.3) * SHAKE_Y * env);
+      this.bouncePlayer(t);
+    } else {
+      this.shakeX = 0;
+      this.shakeY = 0;
+    }
+
+    // Dialog phase: dismiss on any input (after a short lockout so a held key
+    // from the run can't skip it instantly), then advance to Level 1.
+    if (t > DIALOG_AT + 8 && this.cutsceneDismissed()) {
+      this.cutsceneTick = -1;
+      this.shakeX = 0;
+      this.shakeY = 0;
+      this.irisOutTicks = IRIS_TICKS;
+      return;
+    }
+
+    this.cutsceneTick++;
+  }
+
+  // Puppet the player: a few scripted kicks plus gravity, bouncing on the floor
+  // line captured at the strike. Deterministic (no Math.random).
+  private bouncePlayer(t: number): void {
+    const p = this.player;
+    p.prevX = p.x;
+    p.prevY = p.y;
+    if (t === 0) {
+      p.vy = -3.4;
+      p.vx = 1.6;
+    } else if (t === 24) {
+      p.vy = -3.0;
+      p.vx = -1.8;
+    } else if (t === 52) {
+      p.vy = -3.2;
+      p.vx = 1.4;
+    } else if (t === 88) {
+      p.vy = -2.6;
+      p.vx = -1.2;
+    }
+    p.vy += CURSE_GRAVITY;
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.y >= this.cutsceneFloorY) {
+      p.y = this.cutsceneFloorY;
+      p.vy = Math.abs(p.vy) < 0.6 ? 0 : -p.vy * 0.45; // bounce, settle
+      p.vx *= 0.6;
+    }
+    // Don't let the flailing wander far from the altar.
+    const dx = p.x - this.cutsceneBaseX;
+    if (Math.abs(dx) > 24) {
+      p.x = this.cutsceneBaseX + Math.sign(dx) * 24;
+      p.vx = -p.vx * 0.5;
+    }
+  }
+
+  private cutsceneDismissed(): boolean {
+    const i = this.input;
+    return i.aPressed || i.bPressed || i.left || i.right || i.up || i.down;
   }
 
   // Landing on a stunned enemy kills it (the whip itself never kills the
@@ -362,11 +670,29 @@ export class Game {
     }
   }
 
+  private checkSpikeDeath(): void {
+    const px = this.player.x;
+    const py = this.player.y;
+    for (const seg of this.level.spikeSegments) {
+      for (const box of spikeHitboxes(seg, SPIKE_SCALE, SPIKE_CROSS_ASPECT)) {
+        if (
+          px < box.x + box.w &&
+          px + PLAYER_W > box.x &&
+          py < box.y + box.h &&
+          py + PLAYER_H > box.y
+        ) {
+          this.deathTimer = DEATH_TICKS;
+          return;
+        }
+      }
+    }
+  }
+
   private killEnemy(e: Enemy): void {
     e.kill();
     const cx = e.x + e.w / 2;
     const cy = e.y + e.h / 2;
-    if (e.kind === "virus") {
+    if (e.kind === "snake") {
       const s = this.art.snakeHit;
       this.effects.push({ x: cx, y: cy, ticks: s.durationTicks, kind: "snakeHit" });
       return;
@@ -380,14 +706,20 @@ export class Game {
   }
 
   private restart(): void {
-    this.clearedTimer = 0;
+    this.irisInTicks = 0;
+    this.irisOutTicks = 0;
     this.deathTimer = 0;
+    this.cutsceneTick = -1;
+    this.shakeX = 0;
+    this.shakeY = 0;
     this.player.respawn();
     this.enemies = spawnEnemies(this.level);
     for (const sp of this.spawners) sp.reset();
     this.held = null;
     this.effects = [];
     this.shots = [];
+    this.pots = this.level.treasurePots.map((p) => ({ ...p, broken: false }));
+    this.pickups = [];
   }
 
   private touchingExit(): boolean {
@@ -409,6 +741,12 @@ export class Game {
     ctx.fillStyle = COLORS.background;
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
+    // Screenshake: offset the whole world for one pass. The lighting pass below
+    // reads back pixels via getImageData (which ignores the transform), so it's
+    // restored first and then operates on the already-shaken buffer.
+    ctx.save();
+    ctx.translate(this.shakeX, this.shakeY);
+
     for (let ty = 0; ty < GRID_H; ty++) {
       for (let tx = 0; tx < GRID_W; tx++) {
         const tile = this.level.tileAt(tx, ty);
@@ -426,20 +764,25 @@ export class Game {
     }
 
     this.drawGrappleRings();
+    this.drawSpikes();
 
     // Background layer: light statues and spawner statues sit behind everything.
     this.drawLightStatues();
     for (const sp of this.spawners) this.drawSpawner(sp);
+    this.drawPots();
 
     for (const e of this.enemies) {
       if (e.alive) this.drawEnemy(e, alpha);
     }
 
+    this.drawPickups(alpha);
     this.drawPlayer(alpha);
     this.drawWhip(alpha);
     this.drawRope(alpha);
     this.drawShots(alpha);
     this.drawEffects();
+
+    ctx.restore(); // end screenshake offset before the lighting read-back
 
     // Lighting: darken the rendered scene. The player carries a torch and each
     // Light Statue casts a pool; sources combine by max over an ambient floor.
@@ -453,60 +796,154 @@ export class Game {
     for (const ls of this.level.lightStatues) {
       this.lighting.addLight(ls.x, ls.y, STATUE_LIGHT_FULL, STATUE_LIGHT_FADE);
     }
-    this.lighting.apply(ctx, this.lightMode, this.lightNonlinear);
+    this.lighting.apply(
+      ctx,
+      this.lightMode,
+      this.lightNonlinear,
+      this.cutsceneLightFloor(),
+    );
 
-    if (this.showReach && this.reachMap) this.drawReachOverlay(this.reachMap);
+    if (this.irisInTicks > 0 || this.irisOutTicks > 0) {
+      this.drawIris(ctx, alpha);
+    }
 
-    if (this.clearedTimer > 0) {
-      // Blink so the flash reads even on a short timer.
-      if (Math.floor(this.clearedTimer / 8) % 2 === 0) {
-        ctx.fillStyle = COLORS.cleared;
-        ctx.font = "16px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("CLEARED", VIEW_W / 2, VIEW_H / 2);
-      }
+    if (this.cutsceneTick >= 0) this.drawCutscene(ctx);
+  }
+
+  // During the curse strike the lights convulse (flicker between black and a
+  // surge); the dialog phase holds the room lit. Otherwise the normal floor.
+  private cutsceneLightFloor(): number {
+    const t = this.cutsceneTick;
+    if (t < 0) return this.settings.lightFloor;
+    if (t >= CURSE_STRIKE_TICKS) return 0.5; // keep the room readable for dialog
+    const f = Math.sin(t * 0.8) * Math.sin(t * 0.31);
+    return f > 0.3 ? 0.55 : 0.0;
+  }
+
+  // Iris transition: a black mask with a circular window centered on the
+  // player. Opens (grows) on level load, closes (shrinks) toward the exit.
+  private drawIris(ctx: OffscreenCanvasRenderingContext2D, alpha: number): void {
+    const cx = this.player.drawX(alpha) + PLAYER_W / 2;
+    const cy = this.player.drawY(alpha) + PLAYER_H / 2;
+
+    // Reach the farthest corner so "fully open" reveals the whole screen and
+    // doesn't keep growing past it.
+    const maxR = Math.max(
+      Math.hypot(cx, cy),
+      Math.hypot(VIEW_W - cx, cy),
+      Math.hypot(cx, VIEW_H - cy),
+      Math.hypot(VIEW_W - cx, VIEW_H - cy),
+    );
+
+    // Interpolate the tick with alpha for smoothness above 60Hz, then smoothstep.
+    const ticks = this.irisInTicks > 0 ? this.irisInTicks : this.irisOutTicks;
+    let t = 1 - (ticks - alpha) / IRIS_TICKS;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const ease = t * t * (3 - 2 * t);
+    const radius =
+      this.irisInTicks > 0
+        ? IRIS_MIN_RADIUS + (maxR - IRIS_MIN_RADIUS) * ease // grow
+        : maxR + (IRIS_MIN_RADIUS - maxR) * ease; // shrink
+
+    // Black everywhere outside the circle: rect minus a reverse-wound arc.
+    ctx.fillStyle = COLORS.background;
+    ctx.beginPath();
+    ctx.rect(0, 0, VIEW_W, VIEW_H);
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2, true);
+    ctx.fill();
+  }
+
+  // Curse cutscene overlay: the words splat in during the strike, then the
+  // tutorial dialog takes over.
+  private drawCutscene(ctx: OffscreenCanvasRenderingContext2D): void {
+    const t = this.cutsceneTick;
+    if (t < DIALOG_AT) {
+      this.drawCurseWord(ctx, "YOU", VIEW_H * 0.3, 28, t - WORD_YOU_AT, CURSE_PURPLE);
+      this.drawCurseWord(ctx, "ARE", VIEW_H * 0.45, 28, t - WORD_ARE_AT, CURSE_PURPLE);
+      this.drawCurseWord(ctx, "CURSED", VIEW_H * 0.62, 48, t - WORD_CURSED_AT, CURSE_RED);
+    } else {
+      this.drawTutorialDialog(ctx, t - DIALOG_AT);
     }
   }
 
-  // Dev overlay: where can the body get to from spawn, using the real player
-  // physics? Green = on foot alone; gold = only with the whip (what this
-  // level's rings unlock); untinted = unreachable. A red X covers the exit
-  // if even the whip can't get there.
-  private drawReachOverlay(map: ReachMap): void {
-    const ctx = this.ctx;
-    ctx.globalAlpha = 0.35;
-    for (let ty = 0; ty < GRID_H; ty++) {
-      for (let tx = 0; tx < GRID_W; tx++) {
-        const idx = ty * GRID_W + tx;
-        if (!map.full[idx]) continue;
-        ctx.fillStyle = map.walk[idx] ? "#3fae5a" : "#e0a82e";
-        ctx.fillRect(tx * TILE, ty * TILE, TILE, TILE);
-      }
-    }
-    ctx.globalAlpha = 1;
+  // A word that punches in oversized then settles, with a brief fade.
+  private drawCurseWord(
+    ctx: OffscreenCanvasRenderingContext2D,
+    word: string,
+    y: number,
+    baseSize: number,
+    age: number,
+    color: string,
+  ): void {
+    if (age < 0) return;
+    const scale = age < 6 ? 1.7 - age * 0.117 : 1;
+    drawText(ctx, word, VIEW_W / 2, y, {
+      size: Math.round(baseSize * scale),
+      bold: true,
+      color,
+      shadow: "#000000",
+      alpha: Math.min(1, age / 3),
+    });
+  }
 
-    if (!map.exitReachable) {
-      ctx.strokeStyle = "#e84048";
-      ctx.lineWidth = 2;
-      for (let ty = 0; ty < GRID_H; ty++) {
-        for (let tx = 0; tx < GRID_W; tx++) {
-          if (!this.level.isExit(tx, ty)) continue;
-          ctx.beginPath();
-          ctx.moveTo(tx * TILE + 2, ty * TILE + 2);
-          ctx.lineTo((tx + 1) * TILE - 2, (ty + 1) * TILE - 2);
-          ctx.moveTo((tx + 1) * TILE - 2, ty * TILE + 2);
-          ctx.lineTo(tx * TILE + 2, (ty + 1) * TILE - 2);
-          ctx.stroke();
-        }
-      }
-      ctx.lineWidth = 1;
+  private drawTutorialDialog(ctx: OffscreenCanvasRenderingContext2D, age: number): void {
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+    const w = 300;
+    const h = 124;
+    const x = Math.round((VIEW_W - w) / 2);
+    const y = Math.round((VIEW_H - h) / 2);
+    ctx.fillStyle = "#1a1024";
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = "#9a6ad9";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+
+    drawText(ctx, "THE GREED CURSE IS UPON YOU", VIEW_W / 2, y + 24, {
+      size: 13,
+      bold: true,
+      color: CURSE_PURPLE,
+    });
+    drawText(ctx, "Get gold to survive!", VIEW_W / 2, y + 44, {
+      size: 12,
+      color: "#e8e4d8",
+    });
+
+    if (!this.isTouch) {
+      drawText(ctx, "MOVE  ARROWS / WASD", VIEW_W / 2, y + 70, {
+        size: 9,
+        color: "#9a8fa8",
+      });
+      drawText(ctx, "JUMP  Z / K / SPACE        WHIP  X / J", VIEW_W / 2, y + 84, {
+        size: 9,
+        color: "#9a8fa8",
+      });
     }
+
+    if (Math.floor(age / 30) % 2 === 0) {
+      drawText(
+        ctx,
+        this.isTouch ? "TAP TO DESCEND" : "PRESS ANY KEY TO DESCEND",
+        VIEW_W / 2,
+        y + h - 16,
+        { size: 10, bold: true, color: "#d9b36a" },
+      );
+    }
+    ctx.restore();
   }
 
   private drawGrappleRings(): void {
     const s = this.art.hook;
     for (const gp of this.level.grapplePoints) {
       s.drawCentered(this.ctx, 0, gp.x, gp.y);
+    }
+  }
+
+  private drawSpikes(): void {
+    for (const seg of this.level.spikeSegments) {
+      drawSpikeSegment(this.ctx, this.art, seg, SPIKE_SCALE, SPIKE_CROSS_ASPECT);
     }
   }
 
@@ -539,13 +976,39 @@ export class Game {
   private drawSpawner(sp: Spawner): void {
     // Pulse between the dim monument and the lit one while telegraphing.
     const lit = sp.flashing && Math.floor(sp.flashTicks / 6) % 2 === 0;
-    const img = lit ? this.statueLit : this.statueDim;
+    const statue = this.statues[sp.spawn.kind];
+    const img = lit ? statue.lit : statue.dim;
     const r = sp.tileRect;
     this.ctx.drawImage(
       img,
       Math.round(r.x + r.w / 2 - img.width / 2),
       r.y + r.h - img.height,
     );
+  }
+
+  private drawPots(): void {
+    for (const p of this.pots) {
+      if (p.broken) continue;
+      const s = p.kind === "altar" ? this.art.tallPot : this.art.smallPot;
+      s.draw(this.ctx, 0, p.x, (p.ty + 1) * TILE, false);
+    }
+  }
+
+  private drawPickups(alpha: number): void {
+    const s = this.art.coin;
+    const ctx = this.ctx;
+    for (const p of this.pickups) {
+      const frame = s.frameAt(p.anim);
+      const x = Math.round(p.prevX + (p.x - p.prevX) * alpha);
+      const y = Math.round(p.prevY + (p.y - p.prevY) * alpha);
+      // Small coins shrink to 0.5x; the altar coin reads as treasure at 2x.
+      const scale = p.giant ? 2 : COIN_SCALE;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(scale, scale);
+      s.drawCentered(ctx, frame, 0, 0);
+      ctx.restore();
+    }
   }
 
   private drawPlayer(alpha: number): void {
@@ -600,7 +1063,7 @@ export class Game {
     const flip = e.facing === -1;
 
     // Walker: Snake.
-    if (e.kind === "virus") {
+    if (e.kind === "snake") {
       const s = this.art.snake;
       s.draw(this.ctx, s.frameAt(e.animTick), anchorX, anchorY, flip);
       return;
@@ -615,7 +1078,7 @@ export class Game {
 
     // Stationary shooter: Dart Cannon. Idle stare, then the Shoot animation
     // (strobing white) as the wind-up telegraph before a dart fires.
-    if (e.kind === "eye") {
+    if (e.kind === "cannon") {
       if (e.charging && Math.floor(e.animTick / 4) % 2 === 0) {
         this.ctx.filter = "brightness(0) invert(1)"; // drawEnemy resets it
       }
@@ -755,6 +1218,14 @@ export class Game {
     }
     ctx.stroke();
   }
+}
+
+// Whip/collision box for a pot, resting on its cell floor. The altar pot is
+// taller, so its box reaches a tile high; a normal pot is a squat cube.
+function potBox(p: PotState): { x: number; y: number; w: number; h: number } {
+  const w = 12;
+  const h = p.kind === "altar" ? 16 : 12;
+  return { x: p.x - w / 2, y: (p.ty + 1) * TILE - h, w, h };
 }
 
 // Liang-Barsky segment-vs-AABB test for the whip lash.

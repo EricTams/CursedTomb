@@ -103,6 +103,8 @@ Tier is readable from silhouette size alone.
 
 ### First roster entries (decided at Milestone 3)
 
+> **Naming note:** code and art now call these by current names — **Snake** (was Virus), **Troll** (was Plant Box), **Cannon** (was Eye); Bat unchanged. The original names are kept in this section as the Milestone-3 design record. Level legend chars: `s`/`t`/`c`/`a` spawns, `T` Troll spawner.
+
 Art source: the Aseprite sets in the review pool (Virus and Plant Box sprites, approved and copied to `assets/art/`).
 
 | | **Virus** (fodder, small tier) | **Plant Box** (grabbable, person tier) | **Eye** (guardian, special tier) |
@@ -169,7 +171,7 @@ Difficulty = the mix (early: mostly dexterity + one logistics beat; late: logist
 - Target: **template + chunk generation** (Spelunky method) at stratum granularity, with a curation loop:
   - Generation is **deterministic from a seed**; a shipped level = seed + diff list. Approve/reject/regenerate with single keys; rejection reasons become generator rules.
   - **Curate chunks/strata, not whole screens** — approvals compound combinatorially.
-  - **Automated validators run first:** reachability flood-fill, grapple coverage (every gap wider than max jump has a grapple point in whip range), key-before-lock ordering. Machines reject the broken; humans judge the fun.
+  - **Automated validators run first:** grapple coverage (every gap wider than max jump has a grapple point in whip range), key-before-lock ordering. Machines reject the broken; humans judge the fun.
   - Generator guarantee: spawners make key availability permanent (see §5).
 - Tradeoff accepted: random levels trade memorization-as-skill for sight-reading-as-skill, which suits this design (plan the visible screen, then execute).
 
