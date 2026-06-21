@@ -35,6 +35,8 @@ export class EditorRenderer {
     this.statues = {
       s: statueOf(art.snake),
       t: statueOf(art.troll),
+      m: statueOf(art.smallTroll.walk),
+      f: statueOf(art.frog.still),
       c: statueOf(art.cannonIdle),
       a: statueOf(art.bat.fly),
     };
@@ -138,6 +140,12 @@ export class EditorRenderer {
       case "t":
         this.art.troll.draw(b, 0, cx, bottom, flip);
         break;
+      case "m":
+        this.art.smallTroll.walk.draw(b, 0, cx, bottom, flip);
+        break;
+      case "f":
+        this.art.frog.still.draw(b, 0, cx, bottom, flip);
+        break;
       case "c":
         this.art.cannonIdle.draw(b, 0, cx, bottom, flip);
         break;
@@ -150,6 +158,9 @@ export class EditorRenderer {
       case "L":
         this.art.lightStatueOff.draw(b, 0, cx, bottom, false);
         break;
+      case "G":
+        b.drawImage(this.art.glass, px, py);
+        break;
       case "^":
         this.art.spike.up.drawCentered(b, 0, cx, py + TILE / 2);
         break;
@@ -158,6 +169,12 @@ export class EditorRenderer {
         break;
       case "@":
         this.art.tallPot.draw(b, 0, cx, bottom, false);
+        break;
+      case "o":
+        this.art.bounceOnion.still.draw(b, 0, cx, bottom, false);
+        break;
+      case "O":
+        this.art.explosiveBounceOnion.still.draw(b, 0, cx, bottom, false);
         break;
       default:
         break; // background / unknown: nothing

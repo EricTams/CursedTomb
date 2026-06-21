@@ -21,7 +21,9 @@ export const PALETTE_GROUPS: { title: string; items: PaletteItem[] }[] = [
     items: [
       { char: "P", label: "Player spawn" },
       { char: "s", label: "Snake" },
-      { char: "t", label: "Troll" },
+      { char: "t", label: "Large Troll" },
+      { char: "m", label: "Small Troll" },
+      { char: "f", label: "Frog" },
       { char: "c", label: "Cannon" },
       { char: "a", label: "Bat" },
     ],
@@ -31,9 +33,12 @@ export const PALETTE_GROUPS: { title: string; items: PaletteItem[] }[] = [
     items: [
       { char: "*", label: "Grapple ring" },
       { char: "L", label: "Light statue" },
+      { char: "G", label: "Glass window" },
       { char: "^", label: "Spike" },
       { char: "$", label: "Treasure pot" },
       { char: "@", label: "Altar pot" },
+      { char: "o", label: "Bounce Onion" },
+      { char: "O", label: "Explosive Onion" },
     ],
   },
 ];

@@ -6,6 +6,7 @@
 import solidUrl from "../assets/art/Tileset-Tile.png";
 import ladderUrl from "../assets/art/Tileset-Ladder.png";
 import platformUrl from "../assets/art/Tileset-Platform.png";
+import glassUrl from "../assets/art/Tileset-Glass.png";
 
 import exitUrl from "../assets/art/Exit-Door.png";
 import exitJson from "../assets/art/Exit-Door.json";
@@ -161,6 +162,7 @@ export interface Art {
   solid: HTMLImageElement;
   ladder: HTMLImageElement;
   platform: HTMLImageElement;
+  glass: HTMLImageElement; // passable "window" tile; its presence lifts base light
   exit: Sprite;
   hook: Sprite;
   snake: Sprite; // walker (was Virus)
@@ -204,6 +206,7 @@ export async function loadArt(): Promise<Art> {
     solid,
     ladder,
     platform,
+    glass,
     exit,
     hook,
     snake,
@@ -250,6 +253,7 @@ export async function loadArt(): Promise<Art> {
     loadImage(solidUrl),
     loadImage(ladderUrl),
     loadImage(platformUrl),
+    loadImage(glassUrl),
     loadSprite(exitUrl, exitJson),
     loadSprite(hookUrl, hookJson),
     loadSprite(snakeUrl, snakeJson),
@@ -297,6 +301,7 @@ export async function loadArt(): Promise<Art> {
     solid,
     ladder,
     platform,
+    glass,
     exit,
     hook,
     snake,

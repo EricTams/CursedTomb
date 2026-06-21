@@ -4,6 +4,7 @@ import { LEVEL_DESCENT } from "./descent";
 import { LEVEL_FIRST_SWING } from "./first_swing";
 import { LEVEL_BAT_ROOST } from "./bat_roost";
 import { LEVEL_SPIKE_PIT } from "./spike_pit";
+import { LEVEL_PLAYGROUND } from "./playground";
 // <editor-imports></editor-imports>
 
 export interface LevelEntry {
@@ -27,5 +28,6 @@ export const LEVELS: LevelEntry[] = [
   { name: "First Swing", level: LEVEL_FIRST_SWING },
   { name: "Bat Roost", level: LEVEL_BAT_ROOST },
   { name: "Spike Pit", level: LEVEL_SPIKE_PIT },
+  { name: "Playground", level: LEVEL_PLAYGROUND },
   /* <editor-levels> */
 ];

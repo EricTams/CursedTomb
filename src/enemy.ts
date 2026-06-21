@@ -10,11 +10,29 @@ const SNAKE_W = 12;
 const SNAKE_H = 10;
 const SNAKE_SPEED = 0.35;
 
-// Troll: grabbable tier. Hitbox is under a tile tall so a thrown box can
-// pass through one-tile slots even though the art overdraws a little.
+// Large Troll: a tanky watcher. The whip only stuns it (never grabs, never
+// kills); after reviving it goes briefly stun-immune (flashing). It dies only
+// to a thrown object. Same watcher movement as the Small Troll.
 const TROLL_W = 14;
 const TROLL_H = 15;
 const TROLL_SPEED = 0.3;
+// Stun-immunity window after a Large Troll revives, so it can't be perma-locked.
+const TROLL_IMMUNE_TICKS = 2 * TICK_HZ;
+
+// Small Troll: the grabbable tier (the old Troll behavior) — whip stuns, a
+// second whip grabs, and it throws as a weapon. Smaller than the Large Troll;
+// hitbox under a tile tall so a thrown box clears one-tile slots.
+const SMALL_TROLL_W = 12;
+const SMALL_TROLL_H = 12;
+const SMALL_TROLL_SPEED = 0.35;
+
+// Frog: ambush leaper (fodder tier — one whip hit kills). Sits dormant until it
+// spots the player, crouches as a telegraph, then leaps in an arc toward them.
+const FROG_W = 12;
+const FROG_H = 10;
+const FROG_CROUCH_TICKS = 18; // crouch telegraph before the leap (~0.3s)
+const FROG_LEAP_VY = 3.4; // upward launch impulse
+const FROG_LEAP_VX = 1.4; // horizontal lunge toward the player
 
 // Cannon: stationary exit guardian. One whip hit kills it — but its sight far
 // out-ranges the whip, so closing in means dodging bolts; a thrown enemy is
@@ -68,6 +86,7 @@ export type EnemyState =
   | "yanked" // mid-pull: flying to the player's hands (harmless in flight)
   | "held"
   | "thrown"
+  | "leaping" // Frog: mid-leap (the ambush arc)
   | "hanging" // Bat: roosting, waiting for the player to come near
   | "diving"; // Bat: mid-swoop (the parabolic arc)
 
@@ -105,6 +124,7 @@ export class Enemy {
   heldTicks = 0; // counts down while held
   private yankTicks = 0; // counts down while being reeled in
   rouseTicks = 0; // counts down through the idle beat after a sighting
+  immuneTicks = 0; // Large Troll only: stun-immune (flashing) after a revive
   private bounces = 0; // ground bounces used up while thrown
   animTick = 0;
   lastWhipId = 0; // dedups whip hits: one effect per swing
@@ -123,7 +143,11 @@ export class Enemy {
           ? CANNON_W
           : kind === "bat"
             ? BAT_W
-            : TROLL_W;
+            : kind === "smallTroll"
+              ? SMALL_TROLL_W
+              : kind === "frog"
+                ? FROG_W
+                : TROLL_W;
     this.h =
       kind === "snake"
         ? SNAKE_H
@@ -131,9 +155,14 @@ export class Enemy {
           ? CANNON_H
           : kind === "bat"
             ? BAT_H
-            : TROLL_H;
-    // Troll is a watcher: it stands still until it spots the player.
-    if (kind === "troll") this.state = "waiting";
+            : kind === "smallTroll"
+              ? SMALL_TROLL_H
+              : kind === "frog"
+                ? FROG_H
+                : TROLL_H;
+    // Trolls and the Frog are watchers: they stand still until they spot the
+    // player (the Frog then leaps; the trolls walk).
+    if (this.isWatcher || kind === "frog") this.state = "waiting";
     // Bat hangs from its perch until it spots the player below.
     if (kind === "bat") this.state = "hanging";
     // Bottom-center the AABB in the spawn tile.
@@ -145,8 +174,16 @@ export class Enemy {
     this.prevY = this.y;
   }
 
+  // Watcher walkers: both troll kinds share the waiting -> rousing -> patrol
+  // movement (stand still, spot the player, then walk and turn at edges).
+  get isWatcher(): boolean {
+    return this.kind === "troll" || this.kind === "smallTroll";
+  }
+
   get speed(): number {
-    return this.kind === "snake" ? SNAKE_SPEED : TROLL_SPEED;
+    if (this.kind === "snake") return SNAKE_SPEED;
+    if (this.kind === "smallTroll") return SMALL_TROLL_SPEED;
+    return TROLL_SPEED;
   }
 
   // Active = will kill the player on touch.
@@ -155,14 +192,22 @@ export class Enemy {
     if (this.kind === "cannon") return true; // always watching, always lethal
     if (this.kind === "bat") return true; // a flying menace at perch or mid-dive
     return (
-      this.state === "patrol" || this.state === "waiting" || this.state === "rousing"
+      this.state === "patrol" ||
+      this.state === "waiting" ||
+      this.state === "rousing" ||
+      this.state === "leaping" // a Frog in mid-leap is lethal
     );
   }
 
-  // Awake-and-dangerous states: a whip hit stuns any of these. The Cannon and the
-  // Bat are exceptions — a whip hit kills them outright (handled in the game).
+  // Awake-and-dangerous states: a whip hit stuns any of these. Exceptions, all
+  // handled in the game: the Cannon, the Bat, and the Frog die to one whip hit
+  // (never stunned); the Large Troll can't be re-stunned while immune.
   get stunnable(): boolean {
-    return this.kind !== "cannon" && this.kind !== "bat" && this.deadly;
+    if (this.kind === "cannon" || this.kind === "bat" || this.kind === "frog") {
+      return false;
+    }
+    if (this.immuneTicks > 0) return false; // Large Troll: post-revive immunity
+    return this.deadly;
   }
 
   // Whip interactions are valid in these states (not while held/thrown).
@@ -269,6 +314,7 @@ export class Enemy {
     this.prevY = this.y;
     this.animTick++;
     if (this.hitFlash > 0) this.hitFlash--;
+    if (this.immuneTicks > 0) this.immuneTicks--;
 
     // The Cannon never moves: no gravity, no patrol — a fixture, not a walker.
     // It watches: player in sight charges the shot; losing sight winds the
@@ -294,12 +340,18 @@ export class Enemy {
       return false;
     }
 
+    // The Frog ambushes: sit, crouch when it spots the player, then leap.
+    if (this.kind === "frog") {
+      this.updateFrog(player);
+      return false;
+    }
+
     switch (this.state) {
       case "patrol": {
         if (this.grounded) {
           if (this.wallAhead() || !this.groundAhead()) {
             this.facing = this.facing === 1 ? -1 : 1;
-            if (this.kind === "troll") {
+            if (this.isWatcher) {
               // End of the path: turn around and wait for the next sighting.
               this.state = "waiting";
               this.vx = 0;
@@ -349,8 +401,11 @@ export class Enemy {
         this.moveX(this.vx);
         this.moveY(this.vy);
         if (--this.stunTicks <= 0) {
-          this.state = this.kind === "troll" ? "waiting" : "patrol";
+          this.state = this.isWatcher ? "waiting" : "patrol";
           this.animTick = 0;
+          // Large Troll shrugs off the stun and goes briefly immune (flashing)
+          // so it can't be perma-locked by the whip.
+          if (this.kind === "troll") this.immuneTicks = TROLL_IMMUNE_TICKS;
         }
         return false;
       }
@@ -424,6 +479,50 @@ export class Enemy {
       this.vx = 0;
       this.vy = 0;
       this.state = "hanging";
+      this.animTick = 0;
+    }
+  }
+
+  // Frog ambush (ground physics). Sits dormant; when it spots the player it
+  // crouches (a telegraph), then leaps in an arc toward them; lands back into
+  // its dormant sit. Lethal on touch throughout; one whip hit kills it.
+  private updateFrog(player: Rect): void {
+    const cx = this.x + this.w / 2;
+    const pcx = player.x + player.w / 2;
+    this.vy = Math.min(this.vy + GRAVITY, FALL_MAX);
+
+    switch (this.state) {
+      case "waiting": {
+        this.vx = 0;
+        this.facing = pcx < cx ? -1 : 1; // face the player while it watches
+        if (this.seesPlayer(player)) {
+          this.state = "rousing";
+          this.rouseTicks = FROG_CROUCH_TICKS;
+          this.animTick = 0;
+        }
+        break;
+      }
+      case "rousing": {
+        this.vx = 0;
+        this.facing = pcx < cx ? -1 : 1; // keep aiming through the crouch
+        if (--this.rouseTicks <= 0) {
+          this.state = "leaping";
+          this.vy = -FROG_LEAP_VY;
+          this.vx = this.facing * FROG_LEAP_VX;
+          this.animTick = 0;
+        }
+        break;
+      }
+      case "leaping":
+      default:
+        break; // velocity carries the arc; movement applied below
+    }
+
+    this.moveX(this.vx);
+    this.moveY(this.vy);
+    if (this.state === "leaping" && this.grounded) {
+      this.state = "waiting";
+      this.vx = 0;
       this.animTick = 0;
     }
   }

@@ -11,8 +11,14 @@ import { TILE, GRID_W, GRID_H } from "./config";
 //   -  one-way platform (solid from above only; down+jump drops through)
 //   P  player spawn (exactly one; stored as spawn, tile becomes background)
 //   s  Snake spawn (fodder enemy; stored as spawn, tile becomes background)
-//   t  Troll spawn (grabbable enemy; stored as spawn, tile becomes background)
-//      Any spawn (s/t/c/a) becomes a respawning statue spawner of its kind
+//   t  Large Troll spawn (tanky watcher; the whip only stuns it — never grabs,
+//      never kills — and it goes briefly stun-immune after reviving. Killed
+//      only by a thrown object. Stored as spawn, tile becomes background)
+//   m  Small Troll spawn (grabbable enemy: whip stuns, second whip grabs, throw
+//      as a weapon; whip never kills. Stored as spawn, tile becomes background)
+//   f  Frog spawn (ambush leaper: crouches, then leaps when it spots the
+//      player; one whip hit kills. Stored as spawn, tile becomes background)
+//      Any spawn (s/t/m/f/c/a) becomes a respawning statue spawner of its kind
 //      when its cell carries the meta `spawner: true` flag (§5).
 //   c  Cannon spawn (exit guardian; dies to whip or thrown enemy — but its
 //      bolt range far exceeds the whip, so closing in is the risky route)
@@ -20,10 +26,20 @@ import { TILE, GRID_W, GRID_H } from "./config";
 //      player nears, reverses on walls, re-roosts at a ceiling; one whip kills)
 //   *  grapple ring (whip latch point for swinging; tile itself is background)
 //   L  light statue (a static light source; tile itself is background)
+//   G  glass window (passable; any glass in a level raises the base light level
+//      — see Game's light floor; tile itself is background)
 //   ^  spike marker (passable; hazards derived from adjacent solid surfaces)
 //   $  treasure pot (breakable; the whip shatters it, spilling coins)
 //   @  altar pot (breakable; shatters into a single giant coin — the intro
 //      sequence's trigger; tile itself is background)
+//   %  cursed pot (breakable; spills NO treasure — bursts into a lingering
+//      cloud of cursed energy that docks the curse clock on contact. Purple
+//      attacks your clock; dodge it. Tile itself is background)
+//   o  bounce onion (indestructible trampoline pad; landing on top launches
+//      the player — and thrown enemies — upward; tile itself is background)
+//   O  explosive bounce onion (triggered bomb: detonates when the player, the
+//      whip, or a thrown enemy touches it; the blast kills nearby enemies AND
+//      the player; one-shot; tile itself is background)
 
 export enum Tile {
   Background = 0,
@@ -41,7 +57,13 @@ const LEGEND: Record<string, Tile> = {
   "-": Tile.Platform,
 };
 
-export type EnemyKind = "snake" | "troll" | "cannon" | "bat";
+export type EnemyKind =
+  | "snake"
+  | "troll" // large troll: stun-only watcher, killed only by a thrown object
+  | "smallTroll" // grabbable/throwable troll (the old "troll" behavior)
+  | "frog" // ambush leaper
+  | "cannon"
+  | "bat";
 
 // Per-cell metadata side-table. The ASCII grid stays the canonical, readable
 // representation of *what* and *where*; meta carries extra authored attributes
@@ -107,13 +129,38 @@ export interface SpikeSegment {
 // coins; the altar pot ("altar") shatters into a single giant coin. x/y are
 // the tile center in playfield pixels (the pot rests bottom-anchored in its
 // cell). Break state is runtime-only and lives in the Game, not here.
-export type TreasurePotKind = "pot" | "altar";
+export type TreasurePotKind = "pot" | "altar" | "cursed";
 
 export interface TreasurePot {
   kind: TreasurePotKind;
   tx: number;
   ty: number;
   x: number; // tile center px
+  y: number;
+}
+
+// Bounce onion: an interactive object (no AI). A plain "bounce" pad is an
+// indestructible trampoline; an "explosiveBounce" pad is a one-shot bomb that
+// detonates on contact. x/y are the tile center in playfield pixels (it rests
+// bottom-anchored in its cell). Runtime state lives in the Game, not here.
+export type BounceOnionKind = "bounce" | "explosiveBounce";
+
+export interface BounceOnion {
+  kind: BounceOnionKind;
+  tx: number;
+  ty: number;
+  x: number; // tile center px
+  y: number;
+}
+
+// Passable "window" tile. It blocks nothing. Two lighting effects (both applied
+// by Game): a level containing any glass renders with a raised base light floor,
+// AND each glass tile casts a local radial pool like a light statue. x/y are the
+// tile center in playfield pixels (where the emitted pool is centered).
+export interface GlassTile {
+  tx: number;
+  ty: number;
+  x: number;
   y: number;
 }
 
@@ -153,6 +200,8 @@ export class Level {
   readonly lightStatues: readonly LightStatue[];
   readonly spikeSegments: readonly SpikeSegment[];
   readonly treasurePots: readonly TreasurePot[];
+  readonly bounceOnions: readonly BounceOnion[];
+  readonly glassTiles: readonly GlassTile[];
 
   constructor(
     tiles: Tile[],
@@ -164,6 +213,8 @@ export class Level {
     lightStatues: LightStatue[] = [],
     spikeSegments: SpikeSegment[] = [],
     treasurePots: TreasurePot[] = [],
+    bounceOnions: BounceOnion[] = [],
+    glassTiles: GlassTile[] = [],
   ) {
     this.tiles = tiles;
     this.spawnX = spawnX;
@@ -174,6 +225,8 @@ export class Level {
     this.lightStatues = lightStatues;
     this.spikeSegments = spikeSegments;
     this.treasurePots = treasurePots;
+    this.bounceOnions = bounceOnions;
+    this.glassTiles = glassTiles;
   }
 
   tileAt(tx: number, ty: number): Tile {
@@ -244,6 +297,8 @@ export function parseLevel(input: LevelInput): Level {
   const lightStatues: LightStatue[] = [];
   const spikeMarkers: { tx: number; ty: number }[] = [];
   const treasurePots: TreasurePot[] = [];
+  const bounceOnions: BounceOnion[] = [];
+  const glassTiles: GlassTile[] = [];
 
   for (let y = 0; y < GRID_H; y++) {
     if (rows[y].length !== GRID_W) {
@@ -265,6 +320,14 @@ export function parseLevel(input: LevelInput): Level {
       }
       if (ch === "t") {
         pushSpawn("troll", x, y);
+        continue; // spawn tile is background
+      }
+      if (ch === "m") {
+        pushSpawn("smallTroll", x, y);
+        continue; // spawn tile is background
+      }
+      if (ch === "f") {
+        pushSpawn("frog", x, y);
         continue; // spawn tile is background
       }
       if (ch === "c") {
@@ -293,19 +356,38 @@ export function parseLevel(input: LevelInput): Level {
         });
         continue; // statue tile is background
       }
+      if (ch === "G") {
+        glassTiles.push({
+          tx: x,
+          ty: y,
+          x: x * TILE + TILE / 2,
+          y: y * TILE + TILE / 2,
+        });
+        continue; // glass tile is background (passable; lights the map)
+      }
       if (ch === "^") {
         spikeMarkers.push({ tx: x, ty: y });
         continue; // spike marker tile is background
       }
-      if (ch === "$" || ch === "@") {
+      if (ch === "$" || ch === "@" || ch === "%") {
         treasurePots.push({
-          kind: ch === "@" ? "altar" : "pot",
+          kind: ch === "@" ? "altar" : ch === "%" ? "cursed" : "pot",
           tx: x,
           ty: y,
           x: x * TILE + TILE / 2,
           y: y * TILE + TILE / 2,
         });
         continue; // pot tile is background (it rests in the cell)
+      }
+      if (ch === "o" || ch === "O") {
+        bounceOnions.push({
+          kind: ch === "O" ? "explosiveBounce" : "bounce",
+          tx: x,
+          ty: y,
+          x: x * TILE + TILE / 2,
+          y: y * TILE + TILE / 2,
+        });
+        continue; // onion tile is background (it rests in the cell)
       }
       const tile = LEGEND[ch];
       if (tile === undefined) {
@@ -327,5 +409,7 @@ export function parseLevel(input: LevelInput): Level {
     lightStatues,
     spikeSegments,
     treasurePots,
+    bounceOnions,
+    glassTiles,
   );
 }
