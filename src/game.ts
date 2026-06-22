@@ -9,6 +9,7 @@ import {
   type BounceOnionKind,
 } from "./level";
 import { Input } from "./input";
+import { ReplaySource } from "./replay";
 import { Art } from "./art";
 import { Player, PLAYER_W, PLAYER_H } from "./player";
 import { Enemy, spawnEnemies, Spawner, buildSpawners } from "./enemy";
@@ -58,7 +59,7 @@ const EFFECT_TICKS = 14;
 // Bounce onion (trampoline pad): launch impulse given to whatever lands on top.
 // Stronger than a normal jump so it clears several tiles. The squash animation
 // plays for ONION_SQUASH_TICKS after a launch.
-const ONION_LAUNCH = -5.5;
+const ONION_LAUNCH = -6;
 const ONION_SQUASH_TICKS = 10;
 // Explosive onion blast: anything (enemy or player) whose center is within this
 // radius of the onion center when it detonates is killed.
@@ -281,6 +282,7 @@ export class Game {
     private readonly input: Input,
     private readonly settings: Settings,
     private readonly levels: readonly LevelInput[],
+    private readonly replay: ReplaySource,
   ) {
     // The statue is the monster's dormant pose, set in stone. Each kind derives
     // its monument from a representative frame of its own sprite.
@@ -294,7 +296,8 @@ export class Game {
       smallTroll: statueOf(art.smallTroll.walk),
       frog: statueOf(art.frog.still),
       cannon: statueOf(art.cannonIdle),
-      bat: statueOf(art.bat.fly),
+      smallBat: statueOf(art.smallBat.fly),
+      largeBat: statueOf(art.largeBat.fly),
     };
     this.loadLevel(0);
   }
@@ -316,6 +319,9 @@ export class Game {
   // (Re)build the whole play state from a level's ASCII. Used for boot,
   // restarts (same index), and advancing after a clear (next index).
   private loadLevel(index: number): void {
+    // Switching to a different level cancels any intro tape that's playing (a
+    // same-index reload — used to set the tape's start state — does not).
+    if (index !== this.levelIndex) this.replay.stop();
     this.levelIndex = index;
     this.level = parseLevel(this.levels[index]);
     this.player = new Player(this.level);
@@ -391,6 +397,11 @@ export class Game {
       this.updateCutscene();
       return; // the curse cutscene owns the sim while it plays
     }
+
+    // Carrying a Large Bat turns it into a glider: while it's in hand, holding
+    // jump during a fall lets the player drift down slowly (capped in player.ts).
+    this.player.canGlide =
+      this.held?.kind === "largeBat" && this.held.state === "held";
 
     this.player.update(this.input);
 
@@ -556,7 +567,7 @@ export class Game {
       if (
         e.kind === "snake" ||
         e.kind === "cannon" ||
-        e.kind === "bat" ||
+        e.kind === "smallBat" ||
         e.kind === "frog"
       ) {
         this.killEnemy(e); // one whip hit kills (the Cannon's defense is range)
@@ -1045,8 +1056,8 @@ export class Game {
       this.effects.push({ x: cx, y: cy, ticks: s.durationTicks, kind: "snakeHit" });
       return;
     }
-    if (e.kind === "bat") {
-      const s = this.art.bat.hit;
+    if (e.isBat) {
+      const s = this.art.largeBat.hit;
       this.effects.push({ x: cx, y: cy, ticks: s.durationTicks, kind: "batHit" });
       return;
     }
@@ -1456,7 +1467,7 @@ export class Game {
     if (p.whipping || p.holding) {
       s = pa.use;
     } else if (p.climbing) {
-      s = p.vy > 0 ? pa.down : pa.up;
+      s = pa.climb;
       frozen = p.vy === 0; // hold a climb frame when not moving on the ladder
     } else if (!p.grounded) {
       s = p.vy < 0 ? pa.jumpUp : pa.fallDown;
@@ -1497,10 +1508,36 @@ export class Game {
       return;
     }
 
-    // Flyer: Bat. Same wing-flap loop whether perched, diving, or climbing.
-    if (e.kind === "bat") {
-      const s = this.art.bat.fly;
+    // Flyer: Small Bat. Sleeps while roosting on the ceiling, wakes as the
+    // swoop begins, then the wing-flap loop through the dive.
+    if (e.kind === "smallBat") {
+      const s =
+        e.state === "hanging"
+          ? this.art.smallBat.sleep
+          : e.animTick < this.art.smallBat.wakeUp.durationTicks
+            ? this.art.smallBat.wakeUp
+            : this.art.smallBat.fly;
       s.draw(this.ctx, s.frameAt(e.animTick), anchorX, anchorY, flip);
+      return;
+    }
+
+    // Flyer: Large Bat. Wing-flap loop while in flight; the captured/folded pose
+    // (its Hit art) once it's been whipped down — stunned, carried, or thrown.
+    if (e.kind === "largeBat") {
+      const flying = e.state === "hanging" || e.state === "diving";
+      if (flying) {
+        const s = this.art.largeBat.fly;
+        s.draw(this.ctx, s.frameAt(e.animTick), anchorX, anchorY, flip);
+      } else if (e.state === "stunned") {
+        this.art.largeBat.hit.draw(this.ctx, 0, anchorX, anchorY, flip, e.stunScaleY());
+      } else {
+        // yanked / held / thrown: the folded captured pose.
+        const blinking =
+          e.state === "held" &&
+          e.heldTicks <= HELD_BLINK_TICKS &&
+          Math.floor(e.heldTicks / 4) % 2 === 0;
+        if (!blinking) this.art.largeBat.hit.draw(this.ctx, 0, anchorX, anchorY, flip);
+      }
       return;
     }
 
@@ -1617,7 +1654,7 @@ export class Game {
         continue;
       }
       if (fx.kind === "batHit") {
-        const s = this.art.bat.hit;
+        const s = this.art.largeBat.hit;
         const age = s.durationTicks - fx.ticks;
         s.drawCentered(ctx, s.frameAtOnce(age), Math.round(fx.x), Math.round(fx.y));
         continue;

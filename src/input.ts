@@ -36,6 +36,11 @@ export function emptyActions(): ActionState {
 export interface InputSource {
   // Live held state; the source mutates this as device events arrive.
   readonly actions: ActionState;
+  // When true, this source's gameplay actions are authoritative this tick:
+  // every OTHER source's gameplay inputs (left/right/up/down/a/b) are ignored,
+  // while their meta/dev keys still apply. Used by the intro replay so live
+  // input can't perturb a tape that's playing.
+  readonly suppressesGameplay?: boolean;
 }
 
 export class Input {
@@ -79,13 +84,19 @@ export class Input {
     let lightCurve = false;
     let prevLevel = false;
     let nextLevel = false;
-    for (const { actions } of this.sources) {
-      left ||= actions.left;
-      right ||= actions.right;
-      up ||= actions.up;
-      down ||= actions.down;
-      a ||= actions.a;
-      b ||= actions.b;
+    // When a scripted source (the intro replay) is driving, only it contributes
+    // gameplay actions; live player input is muted but meta/dev keys still pass.
+    const suppress = this.sources.some((s) => s.suppressesGameplay);
+    for (const source of this.sources) {
+      const { actions } = source;
+      if (!suppress || source.suppressesGameplay) {
+        left ||= actions.left;
+        right ||= actions.right;
+        up ||= actions.up;
+        down ||= actions.down;
+        a ||= actions.a;
+        b ||= actions.b;
+      }
       restart ||= actions.restart;
       lightMode ||= actions.lightMode;
       lightCurve ||= actions.lightCurve;

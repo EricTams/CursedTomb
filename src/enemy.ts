@@ -44,11 +44,12 @@ const CANNON_H = 12;
 const CANNON_SIGHT_PX = 112; // 7 tiles
 const CANNON_CHARGE_TICKS = 30;
 
-// Bat: ceiling-roosting flyer (fodder tier — one whip hit kills). Roosts until
+// Bat flight (shared by both bat kinds): a ceiling-roosting flyer. Roosts until
 // the player comes near, then swoops in a Zelda 2-style parabolic arc — a
 // downward launch with steady upward acceleration. It dips at most 5 tiles,
 // reverses on walls, and re-roosts when it climbs back into a ceiling. A pure
-// flyer: no gravity, drives its own velocity.
+// flyer: no gravity, drives its own velocity. The Small Bat is fodder (one whip
+// kills); the Large Bat shares this flight but stuns/grabs instead (see below).
 const BAT_W = 12;
 const BAT_H = 8;
 const BAT_TRIGGER_PX = 64; // player within ~4 tiles horizontally wakes the swoop
@@ -58,6 +59,14 @@ const BAT_DIVE_V0 = 2.4; // launch speed downward; also the capped climb speed
 // Upward accel that turns the arc within BAT_DIVE_DEPTH (so peak climb == V0).
 const BAT_DIVE_ACC = (BAT_DIVE_V0 * BAT_DIVE_V0) / (2 * BAT_DIVE_DEPTH);
 const BAT_FLY_VX = 1.0; // horizontal drift through the swoop
+
+// Large Bat: a bigger, grabbable bat. Same hang-and-swoop flight as the small
+// bat (shares updateBat and the dive constants above), but the whip stuns then
+// grabs it like the Small Troll instead of killing — and while carried it works
+// as a glider (the slow-fall is in player.ts). Bigger hitbox, still under a tile
+// tall so a thrown bat clears one-tile slots.
+const LARGE_BAT_W = 16;
+const LARGE_BAT_H = 12;
 
 export const STUN_TICKS = 3 * TICK_HZ; // stun window after a whip hit
 export const GETUP_TICKS = 1 * TICK_HZ; // tail of the stun shows the Get Up telegraph
@@ -141,35 +150,39 @@ export class Enemy {
         ? SNAKE_W
         : kind === "cannon"
           ? CANNON_W
-          : kind === "bat"
+          : kind === "smallBat"
             ? BAT_W
-            : kind === "smallTroll"
-              ? SMALL_TROLL_W
-              : kind === "frog"
-                ? FROG_W
-                : TROLL_W;
+            : kind === "largeBat"
+              ? LARGE_BAT_W
+              : kind === "smallTroll"
+                ? SMALL_TROLL_W
+                : kind === "frog"
+                  ? FROG_W
+                  : TROLL_W;
     this.h =
       kind === "snake"
         ? SNAKE_H
         : kind === "cannon"
           ? CANNON_H
-          : kind === "bat"
+          : kind === "smallBat"
             ? BAT_H
-            : kind === "smallTroll"
-              ? SMALL_TROLL_H
-              : kind === "frog"
-                ? FROG_H
-                : TROLL_H;
+            : kind === "largeBat"
+              ? LARGE_BAT_H
+              : kind === "smallTroll"
+                ? SMALL_TROLL_H
+                : kind === "frog"
+                  ? FROG_H
+                  : TROLL_H;
     // Trolls and the Frog are watchers: they stand still until they spot the
     // player (the Frog then leaps; the trolls walk).
     if (this.isWatcher || kind === "frog") this.state = "waiting";
     // Bat hangs from its perch until it spots the player below.
-    if (kind === "bat") this.state = "hanging";
+    if (this.isBat) this.state = "hanging";
     // Bottom-center the AABB in the spawn tile.
     this.x = spawn.tx * TILE + (TILE - this.w) / 2;
     this.y = (spawn.ty + 1) * TILE - this.h;
     // A bat roosts centered in its perch tile rather than resting on the floor.
-    if (kind === "bat") this.y = spawn.ty * TILE + (TILE - this.h) / 2;
+    if (this.isBat) this.y = spawn.ty * TILE + (TILE - this.h) / 2;
     this.prevX = this.x;
     this.prevY = this.y;
   }
@@ -178,6 +191,11 @@ export class Enemy {
   // movement (stand still, spot the player, then walk and turn at edges).
   get isWatcher(): boolean {
     return this.kind === "troll" || this.kind === "smallTroll";
+  }
+
+  // Both bat kinds share the hang-and-swoop flight (updateBat).
+  get isBat(): boolean {
+    return this.kind === "smallBat" || this.kind === "largeBat";
   }
 
   get speed(): number {
@@ -190,7 +208,9 @@ export class Enemy {
   get deadly(): boolean {
     if (!this.alive) return false;
     if (this.kind === "cannon") return true; // always watching, always lethal
-    if (this.kind === "bat") return true; // a flying menace at perch or mid-dive
+    // A bat is a flying menace at perch or mid-dive, but harmless once it's been
+    // whipped down (stunned / grabbed / carried / thrown) — gate on flight state.
+    if (this.isBat) return this.state === "hanging" || this.state === "diving";
     return (
       this.state === "patrol" ||
       this.state === "waiting" ||
@@ -203,7 +223,9 @@ export class Enemy {
   // handled in the game: the Cannon, the Bat, and the Frog die to one whip hit
   // (never stunned); the Large Troll can't be re-stunned while immune.
   get stunnable(): boolean {
-    if (this.kind === "cannon" || this.kind === "bat" || this.kind === "frog") {
+    // Fodder tier dies to one whip hit (never stuns): Cannon, Small Bat, Frog.
+    // The Large Bat stuns then grabs (like the Small Troll), so it's excluded.
+    if (this.kind === "cannon" || this.kind === "smallBat" || this.kind === "frog") {
       return false;
     }
     if (this.immuneTicks > 0) return false; // Large Troll: post-revive immunity
@@ -335,7 +357,9 @@ export class Enemy {
     }
 
     // The Bat flies under its own power (no gravity): hang, dive, climb back.
-    if (this.kind === "bat") {
+    // Only while in flight — a Large Bat that's been whipped down (stunned /
+    // yanked / held / thrown) falls through to the shared state machine below.
+    if (this.isBat && (this.state === "hanging" || this.state === "diving")) {
       this.updateBat(player);
       return false;
     }
@@ -401,8 +425,18 @@ export class Enemy {
         this.moveX(this.vx);
         this.moveY(this.vy);
         if (--this.stunTicks <= 0) {
-          this.state = this.isWatcher ? "waiting" : "patrol";
+          // A bat shrugged off the stun (or ejected after being carried) flies
+          // back to a roost rather than walking a ground patrol.
+          this.state = this.isBat
+            ? "hanging"
+            : this.isWatcher
+              ? "waiting"
+              : "patrol";
           this.animTick = 0;
+          if (this.isBat) {
+            this.vx = 0;
+            this.vy = 0;
+          }
           // Large Troll shrugs off the stun and goes briefly immune (flashing)
           // so it can't be perma-locked by the whip.
           if (this.kind === "troll") this.immuneTicks = TROLL_IMMUNE_TICKS;

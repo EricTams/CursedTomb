@@ -38,7 +38,8 @@ export class EditorRenderer {
       m: statueOf(art.smallTroll.walk),
       f: statueOf(art.frog.still),
       c: statueOf(art.cannonIdle),
-      a: statueOf(art.bat.fly),
+      a: statueOf(art.smallBat.fly),
+      A: statueOf(art.largeBat.fly),
     };
   }
 
@@ -150,7 +151,10 @@ export class EditorRenderer {
         this.art.cannonIdle.draw(b, 0, cx, bottom, flip);
         break;
       case "a":
-        this.art.bat.fly.draw(b, 0, cx, bottom, flip);
+        this.art.smallBat.sleep.draw(b, 0, cx, bottom, flip);
+        break;
+      case "A":
+        this.art.largeBat.fly.draw(b, 0, cx, bottom, flip);
         break;
       case "*":
         this.art.hook.drawCentered(b, 0, cx, py + TILE / 2);

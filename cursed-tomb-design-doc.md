@@ -47,9 +47,12 @@ All pitches and features are judged against this rubric.
 - **Grab:** whip a stunned enemy again → yank it into your hands (Milestone 4:
   a short reel-in pull, not a teleport — the same pull treasure will use).
 - **Swing:** whip a grapple point → swing traversal. (Milestone 4: the lash
-  crossing near a ring latches — grounded or airborne, no special case; rigid
-  pendulum on a rope fixed at latch distance; left/right pumps; A releases
-  with full momentum and is the only exit.)
+  crossing near a ring latches — grounded or airborne, no special case. The
+  rope has a default swing length (~2.5 tiles): after latching you keep
+  free-falling under gravity until the rope reaches that length, then it snaps
+  taut and you arc (a latch already farther than the default catches at once).
+  Rigid pendulum once taut; left/right pumps; either button releases with full
+  tangential momentum.)
 - **Yank:** whip treasure/objects to pull them to you from range.
 - **The whip never kills person-tier enemies** (Milestone 3 decision): killing a
   stunned enemy takes a different damage source — stomp it, or hit it with a

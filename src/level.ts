@@ -18,12 +18,15 @@ import { TILE, GRID_W, GRID_H } from "./config";
 //      as a weapon; whip never kills. Stored as spawn, tile becomes background)
 //   f  Frog spawn (ambush leaper: crouches, then leaps when it spots the
 //      player; one whip hit kills. Stored as spawn, tile becomes background)
-//      Any spawn (s/t/m/f/c/a) becomes a respawning statue spawner of its kind
+//      Any spawn (s/t/m/f/c/a/A) becomes a respawning statue spawner of its kind
 //      when its cell carries the meta `spawner: true` flag (§5).
 //   c  Cannon spawn (exit guardian; dies to whip or thrown enemy — but its
 //      bolt range far exceeds the whip, so closing in is the risky route)
-//   a  Bat spawn (ceiling-roosting flyer; swoops in a parabolic arc when the
-//      player nears, reverses on walls, re-roosts at a ceiling; one whip kills)
+//   a  Small Bat spawn (ceiling-roosting flyer; swoops in a parabolic arc when
+//      the player nears, reverses on walls, re-roosts at a ceiling; one whip kills)
+//   A  Large Bat spawn (same hang-and-swoop flight, but bigger and grabbable:
+//      whip stuns, a second whip grabs it; carried it works as a glider — hold
+//      jump while falling to drift down slowly. Killed only by a thrown object)
 //   *  grapple ring (whip latch point for swinging; tile itself is background)
 //   L  light statue (a static light source; tile itself is background)
 //   G  glass window (passable; any glass in a level raises the base light level
@@ -63,7 +66,8 @@ export type EnemyKind =
   | "smallTroll" // grabbable/throwable troll (the old "troll" behavior)
   | "frog" // ambush leaper
   | "cannon"
-  | "bat";
+  | "smallBat" // ceiling swoop fodder (one whip kills) — the old "bat"
+  | "largeBat"; // grabbable swooper: whip stuns then grabs; carried as a glider
 
 // Per-cell metadata side-table. The ASCII grid stays the canonical, readable
 // representation of *what* and *where*; meta carries extra authored attributes
@@ -335,7 +339,11 @@ export function parseLevel(input: LevelInput): Level {
         continue; // spawn tile is background
       }
       if (ch === "a") {
-        pushSpawn("bat", x, y);
+        pushSpawn("smallBat", x, y);
+        continue; // spawn tile is background (the bat hangs here)
+      }
+      if (ch === "A") {
+        pushSpawn("largeBat", x, y);
         continue; // spawn tile is background (the bat hangs here)
       }
       if (ch === "*") {

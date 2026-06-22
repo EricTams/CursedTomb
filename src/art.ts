@@ -38,12 +38,20 @@ import frogHitUrl from "../assets/art/Frog-Hit.png";
 import frogHitJson from "../assets/art/Frog-Hit.json";
 import frogHitGroundUrl from "../assets/art/Frog-Hit Ground.png";
 import frogHitGroundJson from "../assets/art/Frog-Hit Ground.json";
+// Large Bat = the original Bat art (grabbable glider). Small Bat = the swoop
+// fodder, drawn with its own smaller art (sleeps while roosting on the ceiling).
 import batFlyUrl from "../assets/art/Bat-Fly.png";
 import batFlyJson from "../assets/art/Bat-Fly.json";
 import batHitUrl from "../assets/art/Bat-Hit.png";
 import batHitJson from "../assets/art/Bat-Hit.json";
 import batCapturedUrl from "../assets/art/Bat-Captured Fly.png";
 import batCapturedJson from "../assets/art/Bat-Captured Fly.json";
+import smallBatFlyUrl from "../assets/art/Small Bat-Fly.png";
+import smallBatFlyJson from "../assets/art/Small Bat-Fly.json";
+import smallBatSleepUrl from "../assets/art/Small Bat-Sleep.png";
+import smallBatSleepJson from "../assets/art/Small Bat-Sleep.json";
+import smallBatWakeUrl from "../assets/art/Small Bat-Wake Up.png";
+import smallBatWakeJson from "../assets/art/Small Bat-Wake Up.json";
 import cannonIdleUrl from "../assets/art/Dart Cannon-Idle.png";
 import cannonIdleJson from "../assets/art/Dart Cannon-Idle.json";
 import cannonShootUrl from "../assets/art/Dart Cannon-Shoot.png";
@@ -97,6 +105,8 @@ import playerUpUrl from "../assets/art/Player-Up.png";
 import playerUpJson from "../assets/art/Player-Up.json";
 import playerDownUrl from "../assets/art/Player-Down.png";
 import playerDownJson from "../assets/art/Player-Down.json";
+import playerClimbUrl from "../assets/art/Player-Climb.png";
+import playerClimbJson from "../assets/art/Player-Climb.json";
 import playerUseUrl from "../assets/art/Player-Use.png";
 import playerUseJson from "../assets/art/Player-Use.json";
 import playerLandUrl from "../assets/art/Player-Hitting Ground.png";
@@ -115,8 +125,9 @@ export interface PlayerArt {
   walk: Sprite;
   jumpUp: Sprite;
   fallDown: Sprite;
-  up: Sprite; // ladder climb (ascending)
-  down: Sprite; // ladder climb (descending)
+  up: Sprite; // ladder peek (ascending pose, currently unused)
+  down: Sprite; // ladder peek (descending pose, currently unused)
+  climb: Sprite; // ladder climb cycle (both directions)
   use: Sprite; // whip / activate
   land: Sprite; // brief landing pose
 }
@@ -141,10 +152,16 @@ export interface FrogArt {
   hitGround: Sprite;
 }
 
-export interface BatArt {
+export interface LargeBatArt {
   fly: Sprite;
   hit: Sprite;
   capturedFly: Sprite;
+}
+
+export interface SmallBatArt {
+  fly: Sprite; // wing-flap loop (mid-dive)
+  sleep: Sprite; // roosting on the ceiling
+  wakeUp: Sprite; // brief transition as the swoop begins
 }
 
 export interface BounceOnionArt {
@@ -171,7 +188,8 @@ export interface Art {
   trollHit: Sprite; // hurt/folded pose for stun/held/thrown
   smallTroll: SmallTrollArt;
   frog: FrogArt;
-  bat: BatArt;
+  largeBat: LargeBatArt; // original Bat art: grabbable glider
+  smallBat: SmallBatArt; // swoop fodder
   cannonIdle: Sprite; // shooter stare (was Eye)
   cannonShoot: Sprite; // shooter charge/fire
   dart: Sprite; // the fired projectile (was the bolt)
@@ -223,6 +241,9 @@ export async function loadArt(): Promise<Art> {
     batFly,
     batHit,
     batCaptured,
+    smallBatFly,
+    smallBatSleep,
+    smallBatWake,
     cannonIdle,
     cannonShoot,
     dart,
@@ -245,6 +266,7 @@ export async function loadArt(): Promise<Art> {
     playerFall,
     playerUp,
     playerDown,
+    playerClimb,
     playerUse,
     playerLand,
     lightStatueOff,
@@ -270,6 +292,9 @@ export async function loadArt(): Promise<Art> {
     loadSprite(batFlyUrl, batFlyJson),
     loadSprite(batHitUrl, batHitJson),
     loadSprite(batCapturedUrl, batCapturedJson),
+    loadSprite(smallBatFlyUrl, smallBatFlyJson),
+    loadSprite(smallBatSleepUrl, smallBatSleepJson),
+    loadSprite(smallBatWakeUrl, smallBatWakeJson),
     loadSprite(cannonIdleUrl, cannonIdleJson),
     loadSprite(cannonShootUrl, cannonShootJson),
     loadSprite(dartUrl, dartJson),
@@ -292,6 +317,7 @@ export async function loadArt(): Promise<Art> {
     loadSprite(playerFallUrl, playerFallJson),
     loadSprite(playerUpUrl, playerUpJson),
     loadSprite(playerDownUrl, playerDownJson),
+    loadSprite(playerClimbUrl, playerClimbJson),
     loadSprite(playerUseUrl, playerUseJson),
     loadSprite(playerLandUrl, playerLandJson),
     loadSprite(lightStatueOffUrl, lightStatueOffJson),
@@ -316,7 +342,8 @@ export async function loadArt(): Promise<Art> {
       hit: frogHit,
       hitGround: frogHitGround,
     },
-    bat: { fly: batFly, hit: batHit, capturedFly: batCaptured },
+    largeBat: { fly: batFly, hit: batHit, capturedFly: batCaptured },
+    smallBat: { fly: smallBatFly, sleep: smallBatSleep, wakeUp: smallBatWake },
     cannonIdle,
     cannonShoot,
     dart,
@@ -338,6 +365,7 @@ export async function loadArt(): Promise<Art> {
       fallDown: playerFall,
       up: playerUp,
       down: playerDown,
+      climb: playerClimb,
       use: playerUse,
       land: playerLand,
     },

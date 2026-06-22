@@ -8,6 +8,7 @@ const WALK_MAX = 1.5;
 const FRICTION = 0.3;
 const GRAVITY = 0.18;
 const FALL_MAX = 5;
+const GLIDE_FALL_MAX = 1.0; // capped descent while gliding with a carried Large Bat
 const JUMP_VEL = -4.2; // ~3 tiles of jump height
 const JUMP_CUT = -1.5; // releasing jump early caps upward speed here
 const COYOTE_TICKS = 6; // grace period (~100ms) to jump after leaving a ledge
@@ -25,12 +26,12 @@ const LAND_TICKS = 8; // brief "hitting ground" pose after a fall
 // Generous on purpose: aim directions are quantized to 8 ways, so a tight
 // radius would make rings only hittable from exact standing spots.
 const LATCH_RADIUS = 10;
-const SWING_MIN_LEN = 8; // degenerate-rope floor when latching point-blank
-// Rope length is the latch distance minus this: the rope "goes taut" and
-// lifts slightly, which also unsticks a grounded latch from directly below.
-const SWING_TAUT_LIFT = 2;
+// After latching you free-fall under gravity until the hand is this far from
+// the ring, then the rope snaps taut and the pendulum begins. A latch already
+// farther than this arcs immediately. Rope length = max(this, latch distance).
+const DEFAULT_SWING_LEN = 40; // 2.5 tiles
 const SWING_PUMP = 0.002; // angular accel from held left/right (rad/tick^2)
-const SWING_MAX_TANGENT = 3.6; // tangential speed cap (px/tick)
+const SWING_MAX_TANGENT = 5; // tangential speed cap (px/tick); lets a big drop become a big swing
 const SWING_IDLE_DAMPING = 0.998; // per-tick decay while no direction is held
 
 // AABB size: slightly narrower than a tile so 1-tile gaps are enterable.
@@ -53,6 +54,7 @@ export class Player {
   swinging = false;
   swingAnchorX = 0;
   swingAnchorY = 0;
+  private swingTaut = false; // false = slack rope free-falling, true = rigid pendulum
   private swingLen = 0;
   private swingAngle = 0;
   private swingVel = 0; // angular velocity (rad/tick)
@@ -66,6 +68,7 @@ export class Player {
   whipDirY = 0;
   whipId = 0; // increments per swing so a hit registers once per enemy
   holding = false; // set by the game while carrying an enemy (whip suppressed)
+  canGlide = false; // set by the game while carrying a Large Bat (glider)
   private coyote = 0; // ticks left where a jump is still allowed after leaving ground
   private jumpBuffer = 0; // ticks left where a stored jump press can fire on landing
   private dropTicks = 0; // ticks left of falling through one-way platforms
@@ -92,6 +95,7 @@ export class Player {
     this.whipTicks = 0;
     this.facing = 1;
     this.holding = false;
+    this.canGlide = false;
     this.swinging = false;
   }
 
@@ -201,6 +205,12 @@ export class Player {
     // Vertical: gravity, jump, variable height via early release.
     this.vy = Math.min(this.vy + GRAVITY, FALL_MAX);
 
+    // Glider (carrying a Large Bat): holding jump while descending caps the fall
+    // to a slow, steady drift. Jumping up and releasing jump are unaffected.
+    if (this.canGlide && input.a && this.vy > 0) {
+      this.vy = Math.min(this.vy, GLIDE_FALL_MAX);
+    }
+
     // Coyote time: refresh while grounded, tick down after leaving a ledge.
     if (this.grounded) this.coyote = COYOTE_TICKS;
     else if (this.coyote > 0) this.coyote--;
@@ -261,19 +271,22 @@ export class Player {
     const hx = this.x + PLAYER_W / 2;
     const hy = this.y;
     const dist = Math.hypot(hx - ax, hy - ay);
-    this.swingLen = Math.min(
-      Math.max(dist - SWING_TAUT_LIFT, SWING_MIN_LEN),
-      WHIP_RANGE,
-    );
-    this.swingAngle = Math.atan2(hx - ax, hy - ay);
-    // Carry momentum onto the arc: the tangential component of the current
-    // velocity becomes angular velocity, so an airborne latch keeps its arc.
-    this.swingVel =
-      (this.vx * Math.cos(this.swingAngle) - this.vy * Math.sin(this.swingAngle)) /
-      this.swingLen;
+    this.swingLen = Math.max(DEFAULT_SWING_LEN, dist);
     this.swingAnchorX = ax;
     this.swingAnchorY = ay;
     this.swinging = true;
+    // A latch already at/past the rope length arcs at once; a closer one
+    // free-falls (slack rope) until the rope reaches swingLen, then catches.
+    this.swingTaut = dist >= this.swingLen;
+    if (this.swingTaut) {
+      this.swingAngle = Math.atan2(hx - ax, hy - ay);
+      // Carry momentum onto the arc: the tangential component of the current
+      // velocity becomes angular velocity, so an airborne latch keeps its arc.
+      this.swingVel =
+        (this.vx * Math.cos(this.swingAngle) - this.vy * Math.sin(this.swingAngle)) /
+        this.swingLen;
+    }
+    // Slack case: keep current vx/vy; angle + swingVel are set at the taut catch.
     this.whipTicks = 0; // the whip IS the rope now
     this.grounded = false;
     this.coyote = 0;
@@ -281,10 +294,37 @@ export class Player {
   }
 
   private swing(input: Input): void {
-    // A is the only exit: release with full tangential momentum. (It's the
+    // Either button exits, releasing with full tangential momentum. (A is the
     // jump button, so the usual jump-cut caps upward speed if let go early.)
-    if (input.aPressed) {
+    if (input.aPressed || input.bPressed) {
       this.releaseSwing();
+      return;
+    }
+
+    if (!this.swingTaut) {
+      // Slack rope: the same air gravity + steering as a normal fall, until
+      // the rope reaches swingLen and the pendulum catches.
+      const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+      if (dir !== 0) {
+        this.facing = dir > 0 ? 1 : -1;
+        const speedAlong = this.vx * dir;
+        this.vx =
+          (speedAlong > WALK_MAX ? speedAlong : Math.min(speedAlong + WALK_ACCEL, WALK_MAX)) *
+          dir;
+      }
+      this.vy = Math.min(this.vy + GRAVITY, FALL_MAX);
+      this.moveX(this.vx);
+      this.moveY(this.vy);
+      if (this.grounded) {
+        // Hit a floor before the rope caught: abandon the swing, resume normal.
+        this.swinging = false;
+        return;
+      }
+      const hx = this.x + PLAYER_W / 2;
+      const hy = this.y;
+      if (Math.hypot(hx - this.swingAnchorX, hy - this.swingAnchorY) >= this.swingLen) {
+        this.goTaut(hx, hy);
+      }
       return;
     }
 
@@ -325,6 +365,19 @@ export class Player {
     this.swinging = false;
     this.coyote = 0;
     this.jumpBuffer = 0;
+  }
+
+  // The slack rope reaches full length: snap onto the circle and convert the
+  // fall into a swing, keeping only the tangential speed (the rope eats the
+  // inward/radial component).
+  private goTaut(hx: number, hy: number): void {
+    this.swingAngle = Math.atan2(hx - this.swingAnchorX, hy - this.swingAnchorY);
+    this.x = this.swingAnchorX + Math.sin(this.swingAngle) * this.swingLen - PLAYER_W / 2;
+    this.y = this.swingAnchorY + Math.cos(this.swingAngle) * this.swingLen;
+    this.swingVel =
+      (this.vx * Math.cos(this.swingAngle) - this.vy * Math.sin(this.swingAngle)) /
+      this.swingLen;
+    this.swingTaut = true;
   }
 
   // Rope attachment point (the hand), for the renderer.
@@ -383,10 +436,30 @@ export class Player {
 
     // Free movement in both axes at climb speed; sliding the body's center
     // off the ladder column releases it (checked below).
-    this.vx = ((input.right ? 1 : 0) - (input.left ? 1 : 0)) * CLIMB_SPEED;
-    this.vy = ((input.down ? 1 : 0) - (input.up ? 1 : 0)) * CLIMB_SPEED;
+    const hDir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    const vDir = (input.down ? 1 : 0) - (input.up ? 1 : 0);
+    this.vx = hDir * CLIMB_SPEED;
+    this.vy = vDir * CLIMB_SPEED;
     this.moveX(this.vx);
     this.moveY(this.vy);
+
+    // Blocked vertical climb while the body straddles into a neighbor column:
+    // slide back onto the ladder's column so the clear shaft opens up. moveY
+    // zeroes vy only on a collision, so vy === 0 after an intended move means
+    // we were blocked. Only when the player isn't steering left/right — that's
+    // "leave the ladder" intent, handled by the release check below.
+    if (vDir !== 0 && this.vy === 0 && hDir === 0) {
+      const targetX = this.centerTileX() * TILE + (TILE - PLAYER_W) / 2;
+      const dx = targetX - this.x;
+      if (Math.abs(dx) > 0.01) {
+        this.moveX(Math.max(-CLIMB_SPEED, Math.min(CLIMB_SPEED, dx)));
+        // A downward block set a false "landing"; clear it so the recenter
+        // isn't released as if we hit the floor. If the ladder column itself
+        // is the floor, next tick we're centered, blocked again, and release
+        // normally.
+        this.grounded = false;
+      }
+    }
 
     // Release at the floor or when moving off the ladder in any direction.
     if (this.grounded || !this.ladderHere()) {

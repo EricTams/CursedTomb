@@ -39,6 +39,7 @@ const game = new Game(
   input,
   settings,
   LEVELS.map((e) => e.level),
+  replay,
 );
 
 // Dev hook: dump the native-res frame buffer to tmp/frame.png on disk (the

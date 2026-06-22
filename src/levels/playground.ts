@@ -1,5 +1,6 @@
 // A throwaway test arena for the newer entities: Frog (f), Small Troll (m),
-// Large Troll (t), Bounce Onion (o), and Explosive Onion (O), plus a coin pot
+// Large Troll (t), Small Bat (a), Large Bat (A), Bounce Onion (o), and
+// Explosive Onion (O), plus a coin pot
 // ($) and a cursed pot (%) near spawn for exercising the curse clock. The
 // cursed pot bursts into a lingering cloud that docks the clock on contact.
 // Deliberately open and flat so combat — not platforming — is what's being
@@ -12,7 +13,7 @@ import type { LevelModule } from "../level";
 export const LEVEL_PLAYGROUND: LevelModule = {
   ascii: `
 ############################
-#..........................#
+#.......a.......A..........#
 #..........................#
 #..........................#
 #..........................#

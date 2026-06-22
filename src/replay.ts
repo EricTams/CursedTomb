@@ -47,6 +47,12 @@ export class ReplaySource implements InputSource {
     return this.playing;
   }
 
+  // While a tape plays it owns gameplay input: Input.poll mutes the live
+  // keyboard/touch gameplay actions so they can't perturb the playback.
+  get suppressesGameplay(): boolean {
+    return this.playing;
+  }
+
   // Begin feeding a tape from the first frame. The caller is responsible for
   // resetting the sim to its start state on the same tick (see Game.reload).
   load(tape: readonly number[]): void {

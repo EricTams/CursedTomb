@@ -25,7 +25,8 @@ export const PALETTE_GROUPS: { title: string; items: PaletteItem[] }[] = [
       { char: "m", label: "Small Troll" },
       { char: "f", label: "Frog" },
       { char: "c", label: "Cannon" },
-      { char: "a", label: "Bat" },
+      { char: "a", label: "Small Bat" },
+      { char: "A", label: "Large Bat" },
     ],
   },
   {
