@@ -30,6 +30,9 @@ export class Settings {
   lightFloor: number;
   // The per-device default, kept so the menu can offer "reset to default".
   readonly defaultLightFloor: number;
+  // Sound-effects volume in [0, 1]. Read by the Sfx layer (audio.ts) at each
+  // play; 0 = muted. Full-blast by default.
+  sfxVolume = 1;
 
   constructor() {
     this.defaultLightFloor = deviceDefaultLightFloor();
@@ -46,15 +49,26 @@ export class Settings {
     this.setLightFloor(this.defaultLightFloor);
   }
 
+  setSfxVolume(v: number): void {
+    this.sfxVolume = clamp(v, 0, 1);
+    this.save();
+  }
+
   // localStorage may be absent or throw (private mode, disabled cookies); a
   // missing/corrupt value just falls back to the device default.
   private load(): void {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
-      const data = JSON.parse(raw) as { lightFloor?: unknown };
+      const data = JSON.parse(raw) as {
+        lightFloor?: unknown;
+        sfxVolume?: unknown;
+      };
       if (typeof data.lightFloor === "number" && isFinite(data.lightFloor)) {
         this.lightFloor = clamp(data.lightFloor, 0, LIGHT_FLOOR_MAX);
+      }
+      if (typeof data.sfxVolume === "number" && isFinite(data.sfxVolume)) {
+        this.sfxVolume = clamp(data.sfxVolume, 0, 1);
       }
     } catch {
       // ignore: keep the device default
@@ -65,7 +79,10 @@ export class Settings {
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ lightFloor: this.lightFloor }),
+        JSON.stringify({
+          lightFloor: this.lightFloor,
+          sfxVolume: this.sfxVolume,
+        }),
       );
     } catch {
       // ignore: storage unavailable, setting just won't persist

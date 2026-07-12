@@ -15,6 +15,7 @@ import { Player, PLAYER_W, PLAYER_H } from "./player";
 import { Enemy, spawnEnemies, Spawner, buildSpawners } from "./enemy";
 import { Lighting, LightMode } from "./lighting";
 import { Settings, LIGHT_FLOOR_MAX } from "./settings";
+import { Sfx } from "./audio";
 import { Sprite } from "./sprite";
 import { drawSpikeSegment, spikeHitboxes, SPIKE_SCALE, SPIKE_CROSS_ASPECT } from "./spikes";
 import { drawText } from "./text";
@@ -61,6 +62,7 @@ const EFFECT_TICKS = 14;
 // plays for ONION_SQUASH_TICKS after a launch.
 const ONION_LAUNCH = -6;
 const ONION_SQUASH_TICKS = 10;
+const FOOTSTEP_INTERVAL = 16; // ticks between footstep SFX while walking (~3.7/s)
 // Explosive onion blast: anything (enemy or player) whose center is within this
 // radius of the onion center when it detonates is killed.
 const ONION_BLAST_R = 24;
@@ -275,12 +277,15 @@ export class Game {
   // Scratch buffer the cursed-energy clouds accumulate their overlap field into
   // (so overlap indexes a palette, rather than additively summing to white).
   private curseScratch: OffscreenCanvas | null = null;
+  // Footstep SFX cadence: counts down while walking; 0 = play a step and reload.
+  private footstepTick = 0;
 
   constructor(
     private readonly ctx: OffscreenCanvasRenderingContext2D,
     private readonly art: Art,
     private readonly input: Input,
     private readonly settings: Settings,
+    private readonly sfx: Sfx,
     private readonly levels: readonly LevelInput[],
     private readonly replay: ReplaySource,
   ) {
@@ -403,7 +408,29 @@ export class Game {
     this.player.canGlide =
       this.held?.kind === "largeBat" && this.held.state === "held";
 
+    // Snapshot pre-update state so we can detect the whip swing (whipId bumps
+    // inside player.update) and the landing edge (grounded rises) for SFX.
+    const wasGrounded = this.player.grounded;
+    const prevWhipId = this.player.whipId;
+
     this.player.update(this.input);
+
+    if (this.player.whipId !== prevWhipId) this.sfx.play("whip");
+    const justLanded = this.player.grounded && !wasGrounded;
+    if (justLanded) this.sfx.play("hitGround");
+    // Footsteps: a steady cadence while walking on the ground (not the landing
+    // tick, which already thumped). Reset when idle/airborne so the first step
+    // after moving off plays promptly.
+    if (this.player.grounded && !justLanded && Math.abs(this.player.vx) > 0.1) {
+      if (this.footstepTick <= 0) {
+        this.sfx.play("footstep");
+        this.footstepTick = FOOTSTEP_INTERVAL;
+      } else {
+        this.footstepTick--;
+      }
+    } else {
+      this.footstepTick = 0;
+    }
 
     // B while holding = throw (the player skipped the whip because holding
     // was set during its update, so the press is ours to consume here).
@@ -435,6 +462,7 @@ export class Game {
 
     if (this.deathTimer === 0 && this.touchingExit()) {
       this.irisOutTicks = IRIS_TICKS;
+      this.sfx.play("exit");
     }
   }
 
@@ -447,7 +475,9 @@ export class Game {
     };
     for (const e of this.enemies) {
       if (!e.alive) continue;
+      const wasHanging = e.state === "hanging"; // bat about to swoop?
       const impact = e.update(playerRect);
+      if (wasHanging && e.state === "diving") this.sfx.play("bat");
 
       if (e === this.held) {
         const carryX = this.player.x + PLAYER_W / 2;
@@ -571,17 +601,23 @@ export class Game {
         e.kind === "frog"
       ) {
         this.killEnemy(e); // one whip hit kills (the Cannon's defense is range)
+        this.sfx.play("hit");
       } else if (e.kind === "troll") {
         // Large Troll: the whip only stuns it (stunnable is already false during
         // the post-revive immunity); it can't be grabbed and only dies to a
         // thrown object.
-        if (e.stunnable) e.stun();
+        if (e.stunnable) {
+          e.stun();
+          this.sfx.play("hit");
+        }
       } else if (e.stunnable) {
         e.stun(); // Small Troll: first hit stuns
+        this.sfx.play("hit");
       } else if (e.state === "stunned" && !this.held) {
         e.startYank(); // ...second hit reels it into the hands over a short pull
         this.held = e;
         this.player.holding = true;
+        this.sfx.play("pickUp");
       }
     }
 
@@ -871,6 +907,7 @@ export class Game {
         this.player.y = b.y - PLAYER_H;
         this.player.vy = ONION_LAUNCH;
         o.squash = ONION_SQUASH_TICKS;
+        this.sfx.play("bounce");
       }
       // ...and launch thrown enemies that land on it (a fun ricochet).
       for (const e of this.enemies) {
@@ -878,6 +915,7 @@ export class Game {
         if (e.vy >= 0 && e.overlaps(b.x, b.y, b.w, b.h)) {
           e.vy = ONION_LAUNCH;
           o.squash = ONION_SQUASH_TICKS;
+          this.sfx.play("bounce");
         }
       }
     }
@@ -888,6 +926,7 @@ export class Game {
   // blast radius, and kill the player if they're caught in it.
   private detonateOnion(o: BounceOnionState): void {
     o.exploded = true;
+    this.sfx.play("explosion");
     const cx = o.x;
     const cy = (o.ty + 1) * TILE - TILE / 2;
     this.effects.push({

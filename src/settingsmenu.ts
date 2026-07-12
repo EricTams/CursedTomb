@@ -104,6 +104,8 @@ export class SettingsMenu {
   private readonly gear: HTMLDivElement;
   private readonly slider: HTMLInputElement;
   private readonly valueLabel: HTMLSpanElement;
+  private readonly sfxSlider: HTMLInputElement;
+  private readonly sfxValueLabel: HTMLSpanElement;
 
   constructor(private readonly settings: Settings) {
     const style = document.createElement("style");
@@ -150,6 +152,27 @@ export class SettingsMenu {
       "Higher lifts the dark areas and shrinks the lighting range — easier to see on a phone screen.";
     panel.appendChild(hint);
 
+    // Sound-effects volume — same slider widget as the brightness row (reuses
+    // the .row / .label / input[type=range] CSS). Percent in, [0,1] into Settings.
+    const sfxRow = document.createElement("div");
+    sfxRow.className = "row";
+    const sfxLabel = document.createElement("div");
+    sfxLabel.className = "label";
+    const sfxName = document.createElement("span");
+    sfxName.textContent = "Sound Effects";
+    this.sfxValueLabel = document.createElement("span");
+    sfxLabel.appendChild(sfxName);
+    sfxLabel.appendChild(this.sfxValueLabel);
+    sfxRow.appendChild(sfxLabel);
+
+    this.sfxSlider = document.createElement("input");
+    this.sfxSlider.type = "range";
+    this.sfxSlider.min = "0";
+    this.sfxSlider.max = "100";
+    this.sfxSlider.step = "1";
+    sfxRow.appendChild(this.sfxSlider);
+    panel.appendChild(sfxRow);
+
     const buttons = document.createElement("div");
     buttons.className = "buttons";
     const resetBtn = document.createElement("button");
@@ -179,6 +202,12 @@ export class SettingsMenu {
       this.settings.setLightFloor(Number(this.slider.value) / 100);
       this.updateValueLabel();
     });
+    this.sfxSlider.addEventListener("input", () => {
+      // The Sfx layer reads settings.sfxVolume at each play, so this takes
+      // effect on the next sound with no further wiring.
+      this.settings.setSfxVolume(Number(this.sfxSlider.value) / 100);
+      this.updateSfxValueLabel();
+    });
   }
 
   private toggle(): void {
@@ -194,9 +223,15 @@ export class SettingsMenu {
   private syncFromSettings(): void {
     this.slider.value = String(Math.round(this.settings.lightFloor * 100));
     this.updateValueLabel();
+    this.sfxSlider.value = String(Math.round(this.settings.sfxVolume * 100));
+    this.updateSfxValueLabel();
   }
 
   private updateValueLabel(): void {
     this.valueLabel.textContent = `${this.slider.value}%`;
+  }
+
+  private updateSfxValueLabel(): void {
+    this.sfxValueLabel.textContent = `${this.sfxSlider.value}%`;
   }
 }

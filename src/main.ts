@@ -8,6 +8,7 @@ import { TouchSource } from "./touch";
 import { OrientationGuard } from "./orientation";
 import { Settings } from "./settings";
 import { SettingsMenu } from "./settingsmenu";
+import { Sfx } from "./audio";
 import { LEVELS } from "./levels";
 import { Recorder, ReplaySource } from "./replay";
 import { INTRO_TAPE } from "./intro-tape";
@@ -29,6 +30,7 @@ const recorder = new Recorder();
 const orientation = new OrientationGuard();
 const settings = new Settings();
 const menu = new SettingsMenu(settings);
+const sfx = new Sfx(settings);
 
 const art = await loadArt();
 // Play order + level data live in src/levels/index.ts (the single source of
@@ -38,6 +40,7 @@ const game = new Game(
   art,
   input,
   settings,
+  sfx,
   LEVELS.map((e) => e.level),
   replay,
 );
