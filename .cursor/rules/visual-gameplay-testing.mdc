@@ -1,0 +1,39 @@
+---
+description: Ask before autonomously testing visual or gameplay changes
+alwaysApply: true
+---
+
+# Visual/Gameplay Testing Preference
+
+The user is better at testing visual and gameplay changes. Do NOT assume you should
+run the game, take screenshots, or playtest on your own. Ask first.
+
+## When to ask
+
+Before any of these, stop and ask whether the **user** wants to test or **you**
+should test:
+
+- Taking screenshots or reading game images to verify appearance
+- Playing through or simulating gameplay to verify feel, timing, controls, or behavior
+- Starting or keeping a dev server running primarily for visual/gameplay validation
+- Declaring a visual/gameplay change "done" or "looks correct" based on your own observation
+
+## How to ask
+
+Use a short, direct prompt — for example:
+
+> "This change affects [brief description]. Would you like to test it yourself, or should I run the game and verify?"
+
+Do not start screenshot or playtesting workflows until the user answers.
+
+## When you may proceed without asking
+
+- Running build, lint, typecheck, or existing automated tests
+- Fixing obvious compile/runtime errors surfaced by those checks
+- Reading static art assets or code (not live gameplay verification)
+
+## Default when the user doesn't specify
+
+If the user replies with something like "go ahead" or "you test it," you may proceed
+with autonomous testing for that task. If the user says they'll test, give clear
+steps (what changed, how to run, what to look for) and wait for their feedback.
